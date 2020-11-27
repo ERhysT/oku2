@@ -1,0 +1,201 @@
+SPECIFICATION -*- mode: org -*-
+# Local Variables:
+# eval: (org-num-mode 1)
+# End:
+
+Project: ozgurokuran
+Author: Ellis Rhys Thomas <e.rhys.thomas@gmail.com>
+
+(c) 2020 E R Thomas. See COPYING for licence details.
+
+* Overview 
+  An electronic paper device that reads UTF-8 files using the
+  Raspberry Pi v2. This is a prototype for a future microcontroller
+  based design which aims to roughly determine hardware requirements.
+* Glossary
+** EPD
+   Electronic paper, also sometimes electronic ink or electrophoretic
+   display, are display devices that mimic the appearance of ordinary
+   ink on paper. Unlike conventional flat panel displays that emit
+   light, electronic paper displays reflect light like paper. This may
+   make them more comfortable to read, and provide a wider viewing
+   angle than most light-emitting displays. [[https://en.wikipedia.org/wiki/Electronic_paper][Source]].
+** HAT
+   Hardware attached on top. A PCB that integrates the EPD driver
+   circuit and provides an SPI slave interface to the controller.
+** SPI
+   Seriel Peripheral Interface. Common two way slave/master
+   communication protocol.
+** GPIO
+   General Purpose Input/Output pin. 
+* Functional Specification
+** EPD with 296Wx128H px resolution
+** Automatically loads a single UTF-8 file on startup
+** Displays a full page of text using 6x6px monospaced bitmap font
+** Operates in landscape mode with left to right, bottom to top text direction
+** Displays unrecognised characters as a blank square
+** Traverses single pages bidirectionally using user input (j,k)
+** Provides a two pixel indicator of book position at the bottom of the display.
+** Powers down device safely upon program termination
+** Powers down device safely upon error
+** Retains page position on restart
+** Error codes output to terminal
+* Technical Specification
+** Hardware
+*** Controller
+Raspberry Pi 3 Model B v1.2 An ARM based microcomputer with BCM2835
+chip. Operating system Raspian Stretch with at least 512MB free space.
+**** BCM 2835 Pin Map
+Pin map for the Raspberry pi.
+| BCM | Name    | Physical | - | Physical | Name    | BCM |
+|-----+---------+----------+---+----------+---------+-----|
+|     | 3.3v    |        1 | - |        2 | 5v      |     |
+|   2 | SDA.1   |        3 | - |        4 | 5v      |     |
+|   3 | SCL.1   |        5 | - |        6 | 0v      |     |
+|   4 | GPIO. 7 |        7 | - |        8 | TxD     |  14 |
+|     | 0v      |        9 | - |       10 | RxD     |  15 |
+|  17 | GPIO. 0 |       11 | - |       12 | GPIO. 1 |  18 |
+|  27 | GPIO. 2 |       13 | - |       14 | 0v      |     |
+|  22 | GPIO. 3 |       15 | - |       16 | GPIO. 4 |  23 |
+|     | 3.3v    |       17 | - |       18 | GPIO. 5 |  24 |
+|  10 | MOSI    |       19 | - |       20 | 0v      |     |
+|   9 | MISO    |       21 | - |       22 | GPIO. 6 |  25 |
+|  11 | SCLK    |       23 | - |       24 | CE0     |   8 |
+|     | 0v      |       25 | - |       26 | CE1     |   7 |
+|   0 | SDA.0   |       27 | - |       28 | SCL.0   |   1 |
+|   5 | GPIO.21 |       29 | - |       30 | 0v      |     |
+|   6 | GPIO.22 |       31 | - |       32 | GPIO.26 |  12 |
+|  13 | GPIO.23 |       33 | - |       34 | 0v      |     |
+|  19 | GPIO.24 |       35 | - |       36 | GPIO.27 |  16 |
+|  26 | GPIO.25 |       37 | - |       38 | GPIO.28 |  20 |
+|     | 0v      |       39 | - |       40 | GPIO.29 |  21 |
+**** Configuration
+SSH into the pi as the root user and install required libraries:
+
+apt install libgpiod
+
+Add a new user to the pi named oku:
+
+\# adduser oku
+
+Add the newly created user to the required groups:
+
+\# usermod -a -G spi oku
+\# usermod -a -G gpio oku
+
+Set up private key ssh access to the new user from your PC. Log in as
+the new user; root access is not required to run the program.  
+*** Display
+Waveshare 2.9inch EPD Module with HAT driver board.
+**** HAT Interface
+| Pin  | Description           | Function   |
+|------+-----------------------+------------|
+| VCC  | 3.3V                  |            |
+| GND  | 0V                    |            |
+| DIN  | MOSI                  | SPI0       |
+| CLK  | System clock          | SPI0       |
+| CS   | Chip select           | Low Active |
+| DC   | Data/Command control  | High Data  |
+| RST  | External reset pin    | Low Reset  |
+| BUSY | Busy state output pin | High Busy  |
+*** Connections
+The Required connections between the EPD HAT and the Raspberry Pi
+are outlined below.
+| EPD Pin | Description           | BCM 2835 Pin | Pi Physical Pin |
+|---------+-----------------------+--------------+-----------------|
+| VCC     | 3.3V                  |       (3.3V) |              17 |
+| GND     | GND                   |         (0V) |               9 |
+| DIN     | SPI MOSI              |           10 |              19 |
+| CLK     | SPI SCK               |           11 |              23 |
+| CS      | SPI chip select       |            8 |              24 |
+| DC      | Data/Command control  |           25 |              22 |
+| RST     | External reset pin    |           17 |              11 |
+| BUSY    | Busy state output pin |           24 |              18 |
+**** Initialisation
+***** Opening spidev interface
+SPI communication has data transfer timing, which is combined by CPHA
+and CPOL.
+
+CPOL determines the level of the serial synchronous clock at idle
+state. When CPOL = 0, the level is Low. However, CPOL has little
+effect to the transmission. CPHA determines whether data is collected
+at the first clock edge or at the second clock edge of serial
+synchronous clock; when CPHL = 0, data is collected at the first clock
+edge.
+
+There are 4 SPI communication modes. SPI0 is commonly used, in which
+CPHL = 0, CPOL = 0.
+
+Data transmission starts at the first falling edge of SCLK, and 8 bits
+of data are transferred in one clock cycle. SPI0 is used and data is
+transferred by bits, MSB first.
+
+| Parameter  |  Value |
+|------------+--------|
+| Channel    |      0 |
+| Clockspeed | 32 MHz |
+| SPI Mode   |      0 |
+
+The device must then be reset by holding the RST pin low for 300 ms.
+
+***** Push Shift Register
+Push shift register to EPD over SPI, command byte followed by data
+bytes.
+
+| Command                    | Data |      |      |
+|----------------------------+------+------+------|
+| DRIVER_OUTPUT_CONTROL      | 0x27 | 0x7F | 0x00 |
+| BOOSTER_SOFT_START_CONTROL | 0xD7 | 0xD6 | 0x9D |
+| WRITE_VCOM_REGISTER        | 0xA8 |      |      |
+| SET_DUMMY_LINE_PERIOD      | 0x1A |      |      |
+| SET_GATE_TIME              | 0x08 |      |      |
+| BORDER_WAVEFORM_CONTROL    | 0x03 |      |      |
+| DATA_ENTRY_MODE_SETTING    | 0x03 |      |      |
+
+***** Push Lookup Table
+Push the lookup table below after sending the WRITE_LUT_REGISTER command.
+| 0x02 | 0x02 | 0x01 | 0x11 | 0x12 | 0x12 | 0x22 | 0x22 |
+| 0x66 | 0x69 | 0x69 | 0x59 | 0x58 | 0x99 | 0x99 | 0x88 |
+| 0x00 | 0x00 | 0x00 | 0x00 | 0xF8 | 0xB4 | 0x13 | 0x51 |
+| 0x35 | 0x51 | 0x51 | 0x19 | 0x01 | 0x00 |      |      |
+
+***** Set the RAM window
+Set the RAM window in the EPD. Note that in the EPD RAM, one byte
+defines eight bits across the width. USING SET_RAM_X_ADDRESS_COUNTER
+and SET_RAM_Y_ADDRESS_COUNTER commands. The respective data bytes
+should correspond to the memory required to store data for the entire
+display. If a coordinate two bytes long, it must be split into two
+bytes and the most significant bits sent first.
+**** Writing EPD Bitmap
+After the RAM window has been defined, the cursor must be set to the
+start using the SET_RAM_X_ADDRESS_COUNTER and
+SET_RAM_Y_ADDRESS_COUNTER commands provided with their respective
+coordinates. If a coordinate two bytes long, it must be split into two
+bytes and the most significant bits sent first.
+
+The data must be written row by row, where each byte a row defines 8
+pixels following. The cursor must then be reset to the start of the
+next row. A black pixel is represented by a binary 1. If a coordinate
+two bytes long, it must be split into two bytes and the most
+significant bits sent first.
+**** Loading Bitmap to EPD
+The following commands are issued to update the display
+| Command                    | Data |
+|----------------------------+------|
+| DISPLAY_UPDATE_CONTROL_2   | 0xC4 |
+| MASTER_ACTIVATION          |      |
+| TERMINATE_FRAME_READ_WRITE |      |
+Then wait while the EPD is busy.
+**** Safe Shutdown
+Leaving the device powered can damage the EPD so it is important that
+the device is powered down following this methed after updating the
+display, upon error and program completion. When the device is not in
+a busy state, send the following command and data bytes.
+| Command         | Data |
+|-----------------+------|
+| DEEP_SLEEP_MODE | 0x01 |
+|                 |      |
+
+** Process Flow
+** Build Environment
+** Error Codes
