@@ -19,7 +19,7 @@ static const char *errcode_str[] =
       "GPIO failure",
       "Failed to clean up all resources",
       "Device busy",
-      "Interupt signal received",
+      "Failed to initialise signal handling",
       "Device or resource uninitialised",
       "CRITICAL: sleep failed - remove power supply!"
     };

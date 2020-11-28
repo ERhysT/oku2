@@ -3,43 +3,67 @@
    See COPYING for licence details. */
 
 #include <stdio.h>
+#include <signal.h>
+#include <unistd.h>
 
 #include "epd.h"
 
 #include "oku_types.h"
 #include "err.h"
 
+volatile sig_atomic_t sigint;
+
 void
-start_signal_handler(void)
+handle_sigint(int signum)
 {
-    return;
+    sigint = signum;
+}
+
+ErrCode
+ignore_sigint(struct sigaction *h)
+{
+    h->sa_handler = handle_sigint;
+    h->sa_flags   = 0;
+
+    return sigaction(SIGINT, h, NULL) < 0
+	? E_SIG : SUCCESS; 
 }
 
 int
 main(int argc, char *argv[])
 {
-    ErrCode status;
+    ErrCode             status;
+    struct sigaction    sigint_action;
 
     if (argc != 1) {
 	fprintf(stderr, "USAGE: %s", argv[0]);
-	return E_ARG;
+	goto err;
     }
 	
-    start_signal_handler();
-	
+    status = ignore_sigint(&sigint_action);
+    if (status)
+	goto err;
+
     status = epd_start();
     if (status)
 	goto err;
 
-    status = epd_clear();
-    if (status)
-	goto err;
+    while (!sigint) {
 
-    status = epd_refresh();
-    if (status)
-	goto err;
+	status = epd_clear();
+	if (status)
+	    break;
 
-err:
+	status = epd_refresh();
+	if (status)
+	    break;
+
+	sleep(5);
+    }
+
+    /* event loop broken, exit cleanly */
+
+ err:
     err_print(status);
     err_print(epd_stop());
 
