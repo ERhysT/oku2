@@ -20,7 +20,7 @@ handle_sigint(int signum)
 }
 
 ErrCode
-ignore_sigint(struct sigaction *h)
+catch_sigint(struct sigaction *h)
 {
     h->sa_handler = handle_sigint;
     h->sa_flags   = 0;
@@ -40,7 +40,7 @@ main(int argc, char *argv[])
 	goto err;
     }
 	
-    status = ignore_sigint(&sigint_action);
+    status = catch_sigint(&sigint_action);
     if (status)
 	goto err;
 
