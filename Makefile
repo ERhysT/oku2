@@ -4,16 +4,22 @@ INCLUDE=-I./src
 CFLAGS= -Wall -Wextra -Wfatal-errors -g3 -DDEBUG
 
 TARGET=oku
-OBJ=oku.o bmp.o book.o epd.o gpio.o err.o glyph.o mem.o spi.o ui.o utf8.o
+OBJ=oku.o epd.o gpio.o err.o spi.o
 
 PI_USERNAME=oku
 PI_HOSTNAME=pi
 PI_DIR=oku
 PI_FULL=$(PI_USERNAME)@$(PI_HOSTNAME):$(PI_DIR)
 
-.PHONY: all clean tags sync build run
+.PHONY: all ball clean tags sync build run
 
+ifeq '$(USER)' '$(PI_USERNAME)'
 all: $(TARGET)
+	echo $(USER)
+else
+all: sync
+	echo $(USER)
+endif
 
 $(TARGET): $(OBJ) 
 	$(CC) $(CFLAGS) $(INCLUDE) $^ -o $@ $(LIBS)
@@ -31,7 +37,7 @@ tags:
 piscope: 
 	./util/piscope.sh $(PI_HOSTNAME)
 
-# remote 
+# remote actions
 sync: clean tags
 	rsync -rav --exclude '.git' -e ssh --delete . $(PI_FULL)
 build: sync
