@@ -11,7 +11,7 @@ PI_HOSTNAME=pi
 PI_DIR=oku
 PI_FULL=$(PI_USERNAME)@$(PI_HOSTNAME):$(PI_DIR)
 
-.PHONY: all ball clean tags sync build run
+.PHONY: all clean tags sync
 
 ifeq '$(USER)' '$(PI_USERNAME)'
 all: $(TARGET)
@@ -26,22 +26,15 @@ $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) $(INCLUDE) -c $< -o $@ $(LIBS)
 
 clean:
-	rm -f *.o
-	rm -f oku
+	rm -f $(OBJ) oku
 
 tags:
 	etags src/*.c src/*.h
 
-piscope: 
-	./util/piscope.sh $(PI_HOSTNAME)
-
 # remote actions
 sync: clean tags
-	rsync -rav --exclude '.git' -e ssh --delete . $(PI_FULL)
-build: sync
-	ssh -t $(PI_USERNAME)@$(PI_HOSTNAME) "cd $(PI_DIR) && make $(TARGET)"
-run: build
-	-ssh -t $(PI_USERNAME)@$(PI_HOSTNAME) "$(PI_DIR)/$(TARGET)"
+	echo $(FILTER)
+	rsync -rav --exclude '.git' -e ssh --delete . $(PI_FULL) -f "- /*.o" -f "- /oku"
 
 # delete some annoying timewasting rules
 Makefile: ;
