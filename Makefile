@@ -15,10 +15,8 @@ PI_FULL=$(PI_USERNAME)@$(PI_HOSTNAME):$(PI_DIR)
 
 ifeq '$(USER)' '$(PI_USERNAME)'
 all: $(TARGET)
-	echo $(USER)
 else
 all: sync
-	echo $(USER)
 endif
 
 $(TARGET): $(OBJ) 
