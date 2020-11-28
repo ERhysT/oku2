@@ -13,7 +13,7 @@ PI_FULL=$(PI_USERNAME)@$(PI_HOSTNAME):$(PI_DIR)
 
 .PHONY: all clean tags sync build run
 
-all: target
+all: $(TARGET)
 
 $(TARGET): $(OBJ) 
 	$(CC) $(CFLAGS) $(INCLUDE) $^ -o $@ $(LIBS)
