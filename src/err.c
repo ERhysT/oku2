@@ -21,10 +21,11 @@ static const char *errcode_str[] =
       "Device busy",
       "Failed to initialise signal handling",
       "Device or resource uninitialised",
-      "CRITICAL: sleep failed - remove power supply!"
+      "CRITICAL: sleep failed - remove power supply",
+      "Not a terminal or misconfigured terminal"
     };
 
-/* Prints error strings to stdout */
+/* Prints error strings to stderr. */
 void
 err_print(ErrCode status)
 {

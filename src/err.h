@@ -17,7 +17,8 @@ typedef enum err_code
 	E_BUSY,
 	E_SIG,
 	E_INIT,
-	E_SLEEP
+	E_SLEEP,
+	E_TERM
     } ErrCode;
 
 /* Print error strings */
