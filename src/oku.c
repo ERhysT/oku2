@@ -8,9 +8,12 @@
 #include <termios.h>
 
 #include "epd.h"
+#include "book.h"
 
 #include "oku_types.h"
 #include "err.h"
+
+#define BOOK_PATH "./book.utf8" 
 
 volatile sig_atomic_t sigint;
 
@@ -64,6 +67,7 @@ main(int argc, char *argv[])
     ErrCode             status;
     struct sigaction    sigint_action;
     struct termios      old_tattr;
+    FILE               *book; 
 
     if (argc != 1) {
 	fprintf(stderr, "USAGE: %s", argv[0]);
@@ -73,17 +77,17 @@ main(int argc, char *argv[])
     status = set_input_mode(&old_tattr);
     if (status)
 	goto cleanup;
-
     status = catch_sigint(&sigint_action);
     if (status)
 	goto cleanup;
-
+    status = book_open(BOOK_PATH, &book);
+    if (status)
+	goto cleanup;
     status = epd_start();
     if (status)
 	goto cleanup;
 
     while (!sigint) {
-
 	status = epd_clear();
 	if (status)
 	    goto cleanup;
@@ -98,12 +102,12 @@ main(int argc, char *argv[])
 	case EOF: status = E_IO;                        goto cleanup;
 	default:  printf("Unrecognised character.\n");
 	}
-
     }
 
     /* event loop broken, exit cleanly */
 
  cleanup:
+    book_close(&book);
     reset_input_mode(&old_tattr);
     err_print(status);
     err_print(epd_stop());

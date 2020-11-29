@@ -4,7 +4,7 @@ INCLUDE=-I./src
 CFLAGS= -Wall -Wextra -Wfatal-errors -g3 -DDEBUG
 
 TARGET=oku
-OBJ=oku.o epd.o gpio.o err.o spi.o
+OBJ=oku.o book.o epd.o gpio.o err.o spi.o
 
 PI_USERNAME=oku
 PI_HOSTNAME=pi

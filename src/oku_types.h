@@ -26,9 +26,7 @@ typedef struct _resolution {
     Point extent;
 } Rectangle ;
 
-
-
-
-
+/* unicode codepoint (maximum 21bits U+10FFFF) */
+typedef uint32_t codept;
 
 #endif	/* OKU_TYPES_H */
