@@ -35,7 +35,7 @@ Author: Ellis Rhys Thomas <e.rhys.thomas@gmail.com>
 ** Operates in landscape mode with left to right, bottom to top text direction
 ** Displays unrecognised characters as a blank square
 ** Traverses single pages bidirectionally using user input (j,k)
-** Provides a two pixel indicator of book position at the bottom of the display.
+** Provides a two pixel indicator of book position at the bottom of the display
 ** Powers down device safely upon program termination
 ** Powers down device safely upon error
 ** Retains page position on restart
