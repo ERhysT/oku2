@@ -13,7 +13,7 @@ ErrCode
 book_open(const char *path_to_open, FILE **file_out)
 {
     *file_out = fopen(path_to_open, "r");
-    return *file_out  ? SUCCESS : E_IO;
+    return *file_out ? SUCCESS : E_PATH;
 }
 
 /* Reads the next codepoint in the book */
@@ -27,6 +27,9 @@ book_getchar(const FILE* book_to_read, codept *char_out)
 void
 book_close(FILE **book_to_close)
 {
+    if (!book_to_close || !*book_to_close)
+	return; 
+
     fclose(*book_to_close);
     *book_to_close = NULL;
     return;

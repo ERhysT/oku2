@@ -18,7 +18,8 @@ typedef enum err_code
 	E_SIG,
 	E_INIT,
 	E_SLEEP,
-	E_TERM
+	E_TERM,
+	E_PATH
     } ErrCode;
 
 /* Print error strings */

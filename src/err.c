@@ -22,7 +22,8 @@ static const char *errcode_str[] =
       "Failed to initialise signal handling",
       "Device or resource uninitialised",
       "CRITICAL: sleep failed - remove power supply",
-      "Not a terminal or misconfigured terminal"
+      "Not a terminal or misconfigured terminal",
+      "Invalid file name"
     };
 
 /* Prints error strings to stderr. */

@@ -13,7 +13,7 @@
 #include "oku_types.h"
 #include "err.h"
 
-#define BOOK_PATH "./book.utf8" 
+#define DEFAULT_BOOK "./book.utf8" 
 
 volatile sig_atomic_t sigint;
 
@@ -67,50 +67,54 @@ main(int argc, char *argv[])
     ErrCode             status;
     struct sigaction    sigint_action;
     struct termios      old_tattr;
+    const char         *book_path;
     FILE               *book; 
 
-    if (argc != 1) {
-	fprintf(stderr, "USAGE: %s", argv[0]);
-	goto cleanup;
+    switch (argc) {
+    case  1:  book_path = DEFAULT_BOOK;          break;
+    case  2:  book_path = argv[1];               break;
+    default:  puts("USAGE: oku [filename]");     return E_ARG;
     }
-	
+
     status = set_input_mode(&old_tattr);
     if (status)
-	goto cleanup;
+	goto os_cleanup;
     status = catch_sigint(&sigint_action);
     if (status)
-	goto cleanup;
-    status = book_open(BOOK_PATH, &book);
+	goto os_cleanup;
+    status = book_open(book_path, &book); 
     if (status)
-	goto cleanup;
-    status = epd_start();
+	goto os_cleanup;
+    status = epd_start();  /* device powered: must be shutdown later */
     if (status)
-	goto cleanup;
+	goto os_cleanup;
 
     while (!sigint) {
 	status = epd_clear();
 	if (status)
-	    goto cleanup;
+	    goto epd_shutdown;
 	status = epd_refresh();
 	if (status)
-	    goto cleanup;
+	    goto epd_shutdown;
 
+	printf("(j) next page\n(p) previous page\n(q) quit\n");
 	switch (getchar()) {
-	case 'j': printf("Move backwards one page.\n"); break;
-	case 'k': printf("Move forwards one page.\n");  break;
-	case 'q': printf("Powering down device.\n");    goto cleanup;
-	case EOF: status = E_IO;                        goto cleanup;
-	default:  printf("Unrecognised character.\n");
+	case 'j': printf("Moving backwards one page.\n"); break;
+	case 'k': printf("Moving forwards one page.\n");  break;
+	case 'q': printf("Powering down device.\n");      goto os_cleanup;
+	case EOF: status = E_IO;                          goto os_cleanup;
+	default:  printf("Unrecognised character.\n");    continue;
 	}
     }
 
     /* event loop broken, exit cleanly */
 
- cleanup:
+ epd_shutdown:
+    err_print(epd_stop());
+ os_cleanup:
+    err_print(status);
     book_close(&book);
     reset_input_mode(&old_tattr);
-    err_print(status);
-    err_print(epd_stop());
 
     return status;
 }
