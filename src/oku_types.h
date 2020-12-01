@@ -9,24 +9,32 @@
 
 #include <stdint.h>
 
+/* Unicode codepoints */
+#define CODEPOINT_INVALID_CHAR 0x0000FFFD
+
+/* unicode codepoint (maximum 21bits U+10FFFF) */
+typedef uint32_t unicode;
+
 /* Must be an eight bit byte */
 typedef unsigned char byte;
 
-/* Coordinate system */
+/* Coordinate system large enough to describe all pixel coordinates */
 typedef uint16_t coordinate;
 
-typedef struct _point {
-    coordinate x;		/* The abscissa */
-    coordinate y;		/* The ordinate */
+typedef struct point {
+    coordinate     x;		/* The abscissa */
+    coordinate     y;		/* The ordinate */
 } Point ;
 
-/* Rectangle defined by two verticies */
-typedef struct _resolution {
-    Point origin;
-    Point extent;
-} Rectangle ;
+/* A rectangle defined by the points of opposing verticies */
+typedef struct rectangle {
+    Point          topleft;
+    Point          bottomright;
+} Rectangle;
 
-/* unicode codepoint (maximum 21bits U+10FFFF) */
-typedef uint32_t codept;
+typedef struct raster {
+    byte           *bitmap;
+    Rectangle       position;
+} Raster;
 
 #endif	/* OKU_TYPES_H */
