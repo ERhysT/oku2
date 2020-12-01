@@ -22,7 +22,7 @@ endif
 $(TARGET): $(OBJ) 
 	$(CC) $(CFLAGS) $(INCLUDE) $^ -o $@ $(LIBS)
 
-%.o: ./src/%.c
+%.o: ./src/%.c ./src/%.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c $< -o $@ $(LIBS)
 
 clean:
