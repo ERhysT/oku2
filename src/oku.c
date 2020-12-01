@@ -9,11 +9,13 @@
 
 #include "epd.h"
 #include "book.h"
+#include "unifont.h"
 
 #include "oku_types.h"
 #include "err.h"
 
-#define DEFAULT_BOOK "./book.utf8" 
+#define DEFAULT_BOOK       "./book.utf8"
+#define DEFAULT_FONT       "./unifont.hex"
 
 volatile sig_atomic_t sigint;
 
@@ -67,14 +69,20 @@ main(int argc, char *argv[])
     ErrCode             status;
     struct sigaction    sigint_action;
     struct termios      old_tattr;
-    const char         *book_path;
-    FILE               *book; 
+
+    const char         *book_path, *font_path;
+    FILE               *book,      *font;
+
+    unicode             codepoint;
+
 
     switch (argc) {
     case  1:  book_path = DEFAULT_BOOK;          break;
     case  2:  book_path = argv[1];               break;
     default:  puts("USAGE: oku [filename]");     return E_ARG;
     }
+    
+    font_path = DEFAULT_FONT; // later add to options
 
     status = set_input_mode(&old_tattr);
     if (status)
@@ -82,29 +90,42 @@ main(int argc, char *argv[])
     status = catch_sigint(&sigint_action);
     if (status)
 	goto os_cleanup;
+
     status = book_open(book_path, &book); 
     if (status)
 	goto os_cleanup;
-    status = epd_start();  /* device powered: must be shutdown later */
+    status = unifont_open(font_path, &font);
     if (status)
 	goto os_cleanup;
 
+    status = epd_start();  /* device powered: must be shutdown later */
+    if (status)
+	goto os_cleanup;
+    status = epd_clear();
+    if (status)
+	goto epd_shutdown;
+    status = epd_refresh();
+    if (status)
+	goto epd_shutdown;
+
     while (!sigint) {
-	status = epd_clear();
-	if (status)
-	    goto epd_shutdown;
-	status = epd_refresh();
-	if (status)
-	    goto epd_shutdown;
 
 	printf("(j) next page\n(p) previous page\n(q) quit\n");
 	switch (getchar()) {
 	case 'j': printf("Moving backwards one page.\n"); break;
 	case 'k': printf("Moving forwards one page.\n");  break;
-	case 'q': printf("Powering down device.\n");      goto os_cleanup;
-	case EOF: status = E_IO;                          goto os_cleanup;
+	case 'q': printf("Powering down device.\n");      goto epd_shutdown;
+	case EOF: status = E_IO;                          goto epd_shutdown;
 	default:  printf("Unrecognised character.\n");    continue;
 	}
+	
+	status = book_getchar(book, &codepoint);
+	if (status)
+	    goto epd_shutdown;
+	status = unifont_getglyph(font, codepoint);
+	if (status)
+	    goto epd_shutdown;
+
     }
 
     /* event loop broken, exit cleanly */
@@ -112,9 +133,12 @@ main(int argc, char *argv[])
  epd_shutdown:
     err_print(epd_stop());
  os_cleanup:
-    err_print(status);
+    unifont_close(&font);
     book_close(&book);
+    
     reset_input_mode(&old_tattr);
+
+    err_print(status);
 
     return status;
 }

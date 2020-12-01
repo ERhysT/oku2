@@ -23,7 +23,12 @@ static const char *errcode_str[] =
       "Device or resource uninitialised",
       "CRITICAL: sleep failed - remove power supply",
       "Not a terminal or misconfigured terminal",
-      "Invalid file name"
+      "Invalid file name",
+      "Invalid UTF-8 file",
+      "End of file",
+      "Memory error",
+      "Unicode codepoint undefined in font",
+      "Invalid unifont file format"
     };
 
 /* Prints error strings to stderr. */
