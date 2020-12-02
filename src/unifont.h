@@ -12,6 +12,7 @@
 
 ErrCode unifont_open(const char *path_to_open, FILE **file_out);
 void    unifont_close(FILE **font_to_close);
-ErrCode unifont_getglyph(FILE* fhandle, unicode codepoint);
+ErrCode unifont_render(FILE* fh, struct Glyph *out);
+
 
 #endif /* UNIFONT_H */

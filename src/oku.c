@@ -2,6 +2,7 @@
    Copyright (C) 2020  Ellis Rhys Thomas <e.rhys.thomas@gmail.com>
    See COPYING for licence details. */
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <signal.h>
 #include <unistd.h>
@@ -73,8 +74,7 @@ main(int argc, char *argv[])
     const char         *book_path, *font_path;
     FILE               *book,      *font;
 
-    unicode             codepoint;
-
+    struct Glyph        glyph;
 
     switch (argc) {
     case  1:  book_path = DEFAULT_BOOK;          break;
@@ -119,13 +119,14 @@ main(int argc, char *argv[])
 	default:  printf("Unrecognised character.\n");    continue;
 	}
 	
-	status = book_getchar(book, &codepoint);
+	status = book_getchar(book, &glyph.codepoint);
 	if (status)
 	    goto epd_shutdown;
-	status = unifont_getglyph(font, codepoint);
+	status = unifont_render(font, &glyph);
 	if (status)
 	    goto epd_shutdown;
 
+	free(glyph.raster.bitmap);
     }
 
     /* event loop broken, exit cleanly */
@@ -135,6 +136,7 @@ main(int argc, char *argv[])
  os_cleanup:
     unifont_close(&font);
     book_close(&book);
+    
     
     reset_input_mode(&old_tattr);
 

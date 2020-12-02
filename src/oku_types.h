@@ -21,20 +21,26 @@ typedef unsigned char byte;
 /* Coordinate system large enough to describe all pixel coordinates */
 typedef uint16_t coordinate;
 
-typedef struct point {
+struct Point {
     coordinate     x;		/* The abscissa */
     coordinate     y;		/* The ordinate */
-} Point ;
+};
 
 /* A rectangle defined by the points of opposing verticies */
-typedef struct rectangle {
-    Point          topleft;
-    Point          bottomright;
-} Rectangle;
+struct Area {
+    struct Point   topleft;
+    struct Point   bottomright;
+};
 
-typedef struct raster {
-    byte           *bitmap;
-    Rectangle       position;
-} Raster;
+struct Raster {
+    struct Point   size;		/* px from top left origin */
+    byte          *bitmap; 
+};
+
+/* Bitmap data for one character glyph */
+struct Glyph {
+    unicode        codepoint;
+    struct Raster  raster;
+};
 
 #endif	/* OKU_TYPES_H */

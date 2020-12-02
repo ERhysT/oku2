@@ -21,7 +21,7 @@
   Glyphs are packed horizontally with a pitch of 8, with the origin at
   the top left. The height always represents 16 bytes
 
-  For example, representation of 'a' (8x16px) is shown below.
+  For example, representation of 'a' (8x16px) is shown below.  
 
   0021:00000000080808080808080008080000
 
@@ -29,24 +29,24 @@
   unicode codepoint                      4
   delimiting ':'                         1
   bitmap                          32 or 64   
-  newline (unless EOF)                   1
-                         MAX TOTAL  =   70
+  newline \n or \r\n               1 or  2    * unless EOF
+                         MAX TOTAL  =   71
 
-  Minimum buffer size to hold any line is 70+'\0' = 71B
+  The buffer size required to hold any line in a unicode and a null
+  terminating byte is therefore 72B.
  */
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #include "err.h"
 #include "oku_types.h"
 
 #include "unifont.h"
 
-#define LINEMAX   71		/* max length of line */
-
-static ErrCode get_line(FILE *fhandle, char *buf, size_t len);
-static ErrCode scan_line(char *toscan, unicode *cp_out, char *bmp_out);
+#define LINEMAX         71	/* max characters in a uhex line */
+#define DELIMITER       ':'
 
 ErrCode
 unifont_open(const char *path_to_open, FILE **file_out)
@@ -68,50 +68,82 @@ unifont_close(FILE **font_to_close)
 }
 
 ErrCode
-unifont_getglyph(FILE* fhandle, unicode codepoint)
+unifont_render(FILE* fh, struct Glyph *out)
 {
     ErrCode       status;
-    char          line_buf[LINEMAX], bmp[64+1];
-    unicode       cp;
+    char          line[LINEMAX+1], *line_cur;
+    byte         *bmp_cur; 
+    size_t        bmp_len;
 
+    if (!out->codepoint)
+	return E_ARG;
+
+    rewind(fh);
+
+    /* Find the uhex line with the matching codepoint */
     do {
-	status = get_line(fhandle, line_buf, sizeof line_buf);
-	if (status)
-	    goto err;
-	status = scan_line(line_buf, &cp, bmp);
-	if (status)
-	    goto err;
-    } while (cp!=codepoint);
+	if (fgets(line, LINEMAX+1, fh) == NULL) {
+
+	    if (feof(fh)) {
+		status = E_MISSINGCHAR;
+	    } else {
+		status = E_IO;
+	    }
+	    rewind(fh);
+	    return status;
+	}
+
+    } while (out->codepoint != strtoul(line, &line_cur, 16));
 
 #ifdef DEBUG
-    printf("U+%04X Found!\nBitmap:%s\n", cp, bmp);
+    printf("Unifont 0x%04x: %s", out->codepoint, line);
 #endif
 
- err:
-    rewind(fhandle);
-    return status;
-}
+    /* Check and move past the delimiter */
+    if (*line_cur++ != DELIMITER)
+	return E_UNIFONT;	/* invalid file format */
 
-/* STATIC FUNCTIONS */
+    out->raster.bitmap = calloc(32, sizeof *out->raster.bitmap); 
+    if (out->raster.bitmap == NULL)
+	return E_MEM;
 
-static ErrCode
-get_line(FILE* fhandle, char *buf, size_t len)
-{
-    if (fgets(buf, len, fhandle))
-	return SUCCESS;
+    bmp_len = 0;
+    bmp_cur = out->raster.bitmap;
+    while (*line_cur!='\0' && !isspace(*line_cur)) {
 
-    /* determine the type of failure */
-    if (feof(fhandle)) { 
-	clearerr(fhandle);
-	return E_MISSINGCHAR;	/* codepoint not in file */
+	if (sscanf(line_cur, "%02hhX", bmp_cur) != 1)
+	    return E_UNIFONT;
+
+	line_cur += 2;
+	++bmp_cur;
+	++bmp_len;
+    }
+	
+    /* Record bitmap dimensions in pixels */
+    switch (bmp_len) {
+    case 16:
+	out->raster.size.x = 1 * 8;
+	out->raster.size.y = 16;
+	break;
+    case 32:
+	out->raster.size.x = 2 * 8;
+	out->raster.size.y = 16;
+	break;
+    default:
+	free(out->raster.bitmap);
+	out->raster.bitmap = NULL;
+	rewind(fh);
+	return E_UNIFONT;
     }
 
-    return E_IO;
-}
+#ifdef DEBUG
+    printf("Bitmap: 0x");
+    for (unsigned i = 0; i<bmp_len; ++i)
+	printf("%02hhx", out->raster.bitmap[i]);
+    printf("\n");
+#endif
+    
 
-static ErrCode
-scan_line(char *toscan, unicode *cp_out, char *bmp_out)
-{
-    return sscanf(toscan, "%04X:%s", cp_out, bmp_out) == 2
-	? SUCCESS : E_UNIFONT;
+    rewind(fh);		/* start of file  */
+    return SUCCESS;
 }
