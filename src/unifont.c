@@ -67,6 +67,9 @@ unifont_close(FILE **font_to_close)
     return;
 }
 
+/* Populates the Raster for a Glyph. Retrieves bitmap
+   comlimentary to the codepoint defined in the Glyph structure from a
+   GNU Unicode .hex file. */
 ErrCode
 unifont_render(FILE* fh, struct Glyph *out)
 {
@@ -75,7 +78,7 @@ unifont_render(FILE* fh, struct Glyph *out)
     byte         *bmp_cur; 
     size_t        bmp_len;
 
-    if (!out->codepoint)
+    if (!out || !out->codepoint)
 	return E_ARG;
 
     rewind(fh);
@@ -83,12 +86,12 @@ unifont_render(FILE* fh, struct Glyph *out)
     /* Find the uhex line with the matching codepoint */
     do {
 	if (fgets(line, LINEMAX+1, fh) == NULL) {
-
-	    if (feof(fh)) {
+	    if (feof(fh)) {	/* determine input error type */
 		status = E_MISSINGCHAR;
 	    } else {
 		status = E_IO;
 	    }
+
 	    rewind(fh);
 	    return status;
 	}
@@ -96,25 +99,25 @@ unifont_render(FILE* fh, struct Glyph *out)
     } while (out->codepoint != strtoul(line, &line_cur, 16));
 
 #ifdef DEBUG
-    printf("Unifont 0x%04x: %s", out->codepoint, line);
+    printf("Unifont: 0x%04x: %s", out->codepoint, line);
 #endif
 
     /* Check and move past the delimiter */
     if (*line_cur++ != DELIMITER)
 	return E_UNIFONT;	/* invalid file format */
 
-    out->raster.bitmap = calloc(32, sizeof *out->raster.bitmap); 
-    if (out->raster.bitmap == NULL)
+    out->render.bitmap = calloc(32, sizeof *out->render.bitmap); 
+    if (out->render.bitmap == NULL)
 	return E_MEM;
 
     bmp_len = 0;
-    bmp_cur = out->raster.bitmap;
+    bmp_cur = out->render.bitmap;
     while (*line_cur!='\0' && !isspace(*line_cur)) {
 
 	if (sscanf(line_cur, "%02hhX", bmp_cur) != 1)
 	    return E_UNIFONT;
 
-	line_cur += 2;
+	line_cur += 2;		/* 2 hexadecimal characters for one byte */
 	++bmp_cur;
 	++bmp_len;
     }
@@ -122,28 +125,28 @@ unifont_render(FILE* fh, struct Glyph *out)
     /* Record bitmap dimensions in pixels */
     switch (bmp_len) {
     case 16:
-	out->raster.size.x = 1 * 8;
-	out->raster.size.y = 16;
+	out->render.size.x = 1 * 8;
+	out->render.size.y = 16;
+	/* could realloc here to save space */
 	break;
     case 32:
-	out->raster.size.x = 2 * 8;
-	out->raster.size.y = 16;
+	out->render.size.x = 2 * 8;
+	out->render.size.y = 16;
 	break;
     default:
-	free(out->raster.bitmap);
-	out->raster.bitmap = NULL;
+	free(out->render.bitmap);
+	out->render.bitmap = NULL;
 	rewind(fh);
 	return E_UNIFONT;
     }
 
 #ifdef DEBUG
     printf("Bitmap: 0x");
-    for (unsigned i = 0; i<bmp_len; ++i)
-	printf("%02hhx", out->raster.bitmap[i]);
+    for (unsigned i=0; i<bmp_len; ++i)
+	printf("%02hhx", out->render.bitmap[i]);
     printf("\n");
 #endif
-    
 
-    rewind(fh);		/* start of file  */
+    rewind(fh);
     return SUCCESS;
 }

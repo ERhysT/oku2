@@ -27,10 +27,10 @@ struct Point {
 };
 
 /* A rectangle defined by the points of opposing verticies */
-struct Area {
-    struct Point   topleft;
-    struct Point   bottomright;
-};
+//struct Area {
+//    struct Point   topleft;
+//    struct Point   bottomright;
+//};
 
 struct Raster {
     struct Point   size;		/* px from top left origin */
@@ -40,7 +40,7 @@ struct Raster {
 /* Bitmap data for one character glyph */
 struct Glyph {
     unicode        codepoint;
-    struct Raster  raster;
+    struct Raster  render;
 };
 
 #endif	/* OKU_TYPES_H */
