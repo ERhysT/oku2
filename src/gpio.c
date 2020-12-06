@@ -133,13 +133,11 @@ void
 GPIO_dump(void)
 {
 #ifdef DEBUG   
-    printf("Active GPIO pins: ");
+    printf("GPIO: ");
     for (int i=0; i<LINE_MAX; ++i)
 	if (gpio.line[i].handle != NULL)
 	    printf("%d[%d] ", i, gpiod_line_get_value(gpio.line[i].handle));
-
     printf("\n");
 #endif
-
     return;
 }

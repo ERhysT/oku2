@@ -106,8 +106,8 @@ spi_dump(byte tx)
     ioctl(spi.fd, SPI_IOC_RD_BITS_PER_WORD, &bits);
     ioctl(spi.fd, SPI_IOC_RD_MAX_SPEED_HZ, &speed);    
 
-    printf("SPI %05ld:0x%02hhx @%dMHz "
-	   "MODE:0x%02hhx LSB:0x%02hhx BITS/WORD:%hhd\n",
+    printf("SPI: %05ld:0x%02hhx @%dMHz "
+	   "mode=0x%02hhx lsb=0x%02hhx bits/word=%hhd\n",
 	   ++count, tx, speed/1000000, mode, lsb, bits);
 #endif
     (void)tx;			/* supress unused warning */
