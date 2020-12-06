@@ -6,7 +6,11 @@
    implementation specific to Waveshare 2.9" Module with HAT. */
 
 #include <unistd.h>
+#include <stdlib.h>
 #include <time.h>
+#include <string.h>
+#include <assert.h>
+#include <stdio.h>
 
 #include "gpio.h"
 #include "spi.h"
@@ -15,24 +19,40 @@
 
 #include "epd.h"
 
-/* Interface connections pinmap (3.3/0V lines not included).
-
-   | Pin  | Description           | BCM 2835 Pin | Pi Physical Pin |
-   |------+-----------------------+--------------+-----------------|
-   | DIN  | SPI MOSI              | 10           |              19 |
-   | CLK  | SPI SCK               | 11           |              23 |
-   | CS   | SPI chip select       | 8            |              24 |
-   | DC   | Data/Command control  | 25           |              22 |
-   | RST  | External reset pin    | 17           |              11 |
-   | BUSY | Busy state output pin | 24           |              18 |  */
-
 /* Device dimensions in pixels. The pitch for this device is
    horizontal i.e one byte represents 8 packed pixels across the
-   width. A helper macro to calculate the pitch packing is
-   provided. */
+   width. */
 #define WIDTH		128	
-#define HEIGHT		296	
-#define PITCH(X)        ( X%8 ? 1+(X/8) : X/8 ) /* px packed to bytes */
+#define HEIGHT		296
+	
+/* Helper macros for converting between the two dimensional (X,Y)
+   coordinates used by the interface, and the one dimensional byte
+   arrays packed to 8 bits (IDX) used in the framebuffer.
+
+   For example: due to horizontal bit packing, a bitmap 128px wide (X)
+   by 296px heigh (Y) requires 296B of storage for each column but
+   only PITCH(X) = 32B across the width.
+   
+   The total number of bytes required to store any buffer will be
+   LEN(X,Y) bytes. Offset determines index location from the
+   difference of two pointers.
+
+   A 1D index to the byte containing a pixel coordinate can be
+   determined with XYCOORD_TO_IDX(W,X,Y). Where W is the width of the
+   bitmap in pixels. A mask for the bit representing the pixel can be
+   identified with BITMASK(X).
+   
+   For any byte index (I), with knowledge of the bitmap pitch (P), the
+   y pixel coordinate can be determined using IDX_TO_YCOORD(I, W). The
+   coordinate of the first bit at the index can be returned by
+   IDX_TO_XCOORD(I, W).   */
+#define PITCH(X)              ( X%8 ? 1+(X/8) : X/8  )
+#define LEN(X,Y)              ( PITCH(X) * Y         )
+#define OFFSET(S,E)           ( E - S                )
+#define XYCOORD_TO_IDX(W,X,Y) ( (Y*PITCH(W)) + (X/8) )
+#define BITMASK(X)            ( 0x01 << (7-(X%8))    )
+#define IDX_TO_YCOORD(I, W)   ( I / PITCH(W)         )
+#define IDX_TO_XCOORD(I, W)   ( (I%PITCH(W)) * 8     )
 
 /* Interface Configuration */
 #define GPIO_DEVICE       "/dev/gpiochip0"
@@ -47,9 +67,20 @@
 #define GPIO_DELAY        200 	           /* sample delay time (ms) */
 #define REFRESH_DELAY     500		   /* wait after refreshing display */
 
-/* pin numbers use BCM2835 numbering not pi physical numbers. DIN
+/* Pin numbers use BCM2835 numbering not pi physical numbers. DIN
    (MOSI) and CLK are not enumerated as they are not manually
-   managed with gpio.h. */
+   managed with gpio.h but with spidev.h 
+
+   Interface connections pinmap (3.3/0V lines not included):
+
+   | Pin  | Description           | BCM 2835 Pin | Pi Physical Pin |
+   |------+-----------------------+--------------+-----------------|
+   | DIN  | SPI MOSI              | 10           |              19 |
+   | CLK  | SPI SCK               | 11           |              23 |
+   | CS   | SPI chip select       | 8            |              24 |
+   | DC   | Data/Command control  | 25           |              22 |
+   | RST  | External reset pin    | 17           |              11 |
+   | BUSY | Busy state output pin | 24           |              18 |  */
 enum BCM_PIN	     
     {
 	BCM_PIN_ChipSelect  =  8, /* pi->epd: Low when SPI active */
@@ -58,7 +89,7 @@ enum BCM_PIN
 	BCM_PIN_Busy        = 24  /* epd->pi: Low when busy */
     };
 
-/* Internal representation of pixel colour for this device */
+/* Representation of pixel colour for this device */
 enum {BLACK = 0x00 , WHITE = 0xFF};
 
 /* EPD command bytes */
@@ -113,6 +144,8 @@ const byte lut_partial_update[LUT_LEN] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+byte *fbuf;			/* screen buffer */
+
 /* FORWARD DECLARATIONS */
 static ErrCode init_gpio(void);
 static ErrCode init_spi(void);
@@ -127,6 +160,7 @@ static ErrCode dev_poweroff(void);
 static ErrCode transmit_command(const byte tx);
 static ErrCode transmit_data(const byte *tx, size_t len);
 static ErrCode transmit_lut(const byte *lut);
+static ErrCode transmit_framebuffer(void);
 
 static ErrCode delay(unsigned ms);
 
@@ -134,14 +168,13 @@ static ErrCode delay(unsigned ms);
 
 /* Start communications and transmit initialisation sequences to EPD. */
 ErrCode
-epd_start(void)
+epd_start(struct Point *px_out)
 {
     ErrCode status;
 
     status = init_gpio();
     if (status)
 	goto err;
-
     status = init_spi();
     if (status)
 	goto err;
@@ -149,59 +182,70 @@ epd_start(void)
     status = dev_reset();
     if (status)
 	goto err;
-
     status = dev_init();
     if (status)
 	goto err;
-
     status = transmit_lut(lut_full_update);
     if (status)
 	goto err;
+
+    fbuf = calloc(LEN(WIDTH, HEIGHT), sizeof *fbuf);
+    if (!fbuf) {
+	status = E_MEM;
+	goto err;
+    }
+
+    px_out->x = WIDTH;
+    px_out->y = HEIGHT;
 
  err:
     return status;
 }
 
-/* Sets every bit in EPD RAM representing a pixel to the defined value
-   of WHITE within the provided rectangle.
-
-   For this device, the cursor needs to be reset set for each row. The
-   data representing the pitch can then be transmitted byte by byte. */
+/* Sets every bit in framebuffer to the defined value of WHITE. Does
+   not transmit any data to epd. */
 ErrCode
 epd_clear(void)
 {
-    ErrCode status;
-    const byte colour[] = { WHITE };
+    assert(fbuf && "Dereferenced null pointer");
 
-    /* px coordiantes into packed bytes */
-    uint16_t x = 0;		/* initial byte */
-    uint16_t y = 0;
-    uint16_t X = PITCH(WIDTH);	/* final byte */
-    uint16_t Y = HEIGHT;
-
-    status = dev_set_ram_window(x, y, WIDTH, HEIGHT);
-    if (status)
-	goto err;
-
-    /* It is required to transmit pixel data row by row */
-    for (y=0; y<Y; y++) {
-	status = dev_set_ram_cursor(0, y);
-	if ( status)
-	    goto err; 
-
-	status = transmit_command(WRITE_RAM);
-	if (status)
-	    goto err;
+    for (int i=0; i<LEN(WIDTH,HEIGHT); ++i)
+	fbuf[i] = WHITE;
 	
-	for (x=0; x<X; x++) {
-	    status = transmit_data(colour, sizeof colour);
-	    if (status)
-		goto err;
-	}
+    return SUCCESS;
+}
+
+/* Copies a bitmap into the framebuffer starting at origin. Must be
+   byte aligned. */
+ErrCode
+epd_write(const struct Raster *img, struct Point origin)
+{
+    coordinate y;		/* a row in dest */
+    byte *src, *dest;		/* cursors */
+
+    assert(img && img->bitmap && "Dereferenced null pointer");
+
+    src  = img->bitmap;
+    dest = fbuf + XYCOORD_TO_IDX(WIDTH, origin.x, origin.y);
+
+    for (y=0; y<img->size.y; ++y) {
+	memcpy(dest, src, PITCH(img->size.x));
+
+#ifdef DEBUG
+	printf("Framebuffer: src(%03d,%03d)[%03d]->dest(%03d,%03d)[%03d]\n",
+	       IDX_TO_XCOORD(OFFSET(img->bitmap, src), img->size.x),
+	       IDX_TO_YCOORD(OFFSET(img->bitmap, src), img->size.y),
+	       OFFSET(img->bitmap, src),
+	       IDX_TO_XCOORD(OFFSET(fbuf, dest), WIDTH),
+	       IDX_TO_YCOORD(OFFSET(fbuf, dest), WIDTH),
+	       OFFSET(fbuf, dest)
+	       );
+#endif
+	src  += PITCH(img->size.x);
+	dest += PITCH(WIDTH);
     }
-    
- err:
-    return status;
+
+    return SUCCESS; 
 }
 
 ErrCode
@@ -209,6 +253,11 @@ epd_refresh(void)
 {
     ErrCode status;
 
+    assert(fbuf && "Frame buffer not initialised");
+
+    status = transmit_framebuffer();
+    if (status)
+	goto err;
     status = transmit_command(DISPLAY_UPDATE_CONTROL_2);
     if (status)
 	goto err;
@@ -236,6 +285,9 @@ ErrCode
 epd_stop(void)
 {
     ErrCode status;
+
+    if (fbuf)
+	free(fbuf);
 
     status = dev_poweroff();
     GPIO_stop();
@@ -551,6 +603,34 @@ transmit_lut(const byte *lut)
 	goto err;
 
  err:
+    return status;
+}
+
+/* Framebuffer is transfered row by row */
+static ErrCode
+transmit_framebuffer(void)
+{
+    ErrCode status;
+    coordinate y;
+    byte *tx;
+
+    status = dev_set_ram_window(0, 0, WIDTH, HEIGHT);
+    if (status)
+	goto err;
+
+    for (y=0, tx=fbuf; y<HEIGHT; y++, tx+=PITCH(WIDTH)) {
+	status = dev_set_ram_cursor(0, y);
+	if ( status)
+	    goto err; 
+	status = transmit_command(WRITE_RAM);
+	if (status)
+	    goto err;
+	status = transmit_data(tx, PITCH(WIDTH));
+	if (status)
+	    goto err;
+    }
+
+err:
     return status;
 }
 

@@ -74,7 +74,8 @@ main(int argc, char *argv[])
     const char         *book_path, *font_path;
     FILE               *book,      *font;
 
-    struct Glyph        glyph;
+    struct Point        pen, paper; /* cursor and limits  */
+    struct Glyph        glyph;	    /* to contain a rendered codepoint */
 
     switch (argc) {
     case  1:  book_path = DEFAULT_BOOK;          break;
@@ -82,52 +83,85 @@ main(int argc, char *argv[])
     default:  puts("USAGE: oku [filename]");     return E_ARG;
     }
     
-    font_path = DEFAULT_FONT; // later add to options
+    font_path = DEFAULT_FONT;
 
     status = set_input_mode(&old_tattr);
-    if (status)
-	goto os_cleanup;
+    if (status)	goto os_cleanup;
     status = catch_sigint(&sigint_action);
-    if (status)
-	goto os_cleanup;
+    if (status)	goto os_cleanup;
 
     status = book_open(book_path, &book); 
-    if (status)
-	goto os_cleanup;
+    if (status)	goto os_cleanup;
     status = unifont_open(font_path, &font);
-    if (status)
-	goto os_cleanup;
+    if (status)	goto os_cleanup;
 
-    status = epd_start();  /* device powered: must be shutdown later */
-    if (status)
-	goto os_cleanup;
+    status = epd_start(&paper);  /* device powered: must be shutdown later */
+    if (status)	goto os_cleanup;
     status = epd_clear();
-    if (status)
-	goto epd_shutdown;
+    if (status)	goto epd_shutdown;
     status = epd_refresh();
-    if (status)
-	goto epd_shutdown;
+    if (status)	goto epd_shutdown;
 
-    while (!sigint) {
+    pen.x = pen.y = 0; 		/* start writing at (top left) origin */
 
-	printf("(j) next page\n(p) previous page\n(q) quit\n");
+    do {
+	/*
+	   User Input
+	*/
+	fputs("Input: next(k) previous(j) quit(q)... ", stdout);
+	fflush(stdout);
 	switch (getchar()) {
-	case 'j': printf("Moving backwards one page.\n"); break;
-	case 'k': printf("Moving forwards one page.\n");  break;
-	case 'q': printf("Powering down device.\n");      goto epd_shutdown;
-	case EOF: status = E_IO;                          goto epd_shutdown;
-	default:  printf("Unrecognised character.\n");    continue;
+	case 'j': puts("Not implemented.");          continue;
+	case 'k': puts("Moving forward one page.");  break;
+	case 'q': puts("Powering down device.");     goto epd_shutdown;
+	case EOF: status = E_IO;                     goto epd_shutdown;
+	default:  puts("Unrecognised character.");   continue;
 	}
-	
-	status = book_getchar(book, &glyph.codepoint);
-	if (status)
-	    goto epd_shutdown;
-	status = unifont_render(font, &glyph);
-	if (status)
-	    goto epd_shutdown;
 
-	free(glyph.raster.bitmap);
-    }
+	while(!sigint) {
+	    /*
+	      Load bitmap of the next character
+	    */
+	    status = book_getchar(book, &glyph.codepoint);
+	    if (status)	goto epd_shutdown;
+	    status = unifont_render(font, &glyph);
+	    if (status)	goto epd_shutdown;
+	    /*
+	      Check pen position before writing
+	    */
+	    if (pen.x+glyph.render.size.x > paper.x) {
+		pen.y += glyph.render.size.y;
+		pen.x  = 0;
+	    }
+	    if (pen.y+glyph.render.size.y > paper.y) {
+		free(glyph.render.bitmap); 
+		//status = book_ungetchar(book, glyph.codepoint);
+		break;
+	    }
+
+#ifdef DEBUG
+	    printf("Pen: (%03u,%03u) "
+		   "Paper: (%03u,%03u) "
+		   "Glyph: (%03u,%03u)\n",
+		   pen.x, pen.y, paper.x, paper.y,
+		   glyph.render.size.x, glyph.render.size.y);
+#endif
+
+	    status = epd_write(&glyph.render, pen);
+	    if (status)	goto epd_shutdown;
+	    /* 
+	       Increment Pen
+	    */
+	    pen.x += glyph.render.size.x;
+	    free(glyph.render.bitmap);
+	}
+	/* 
+	   Update display
+	*/
+	status = epd_refresh();
+	if (status) goto epd_shutdown;
+
+    } while (!sigint);
 
     /* event loop broken, exit cleanly */
 
