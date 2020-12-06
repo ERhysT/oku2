@@ -31,15 +31,15 @@ Author: Ellis Rhys Thomas <e.rhys.thomas@gmail.com>
 * Functional Specification
 ** EPD with 296Wx128H px resolution
 ** Automatically loads a single UTF-8 file on startup
-** Displays a full page of text using 6x6px monospaced bitmap font
+** Displays a full page of text using 8x8px or 8x16px (CJK) monospaced font
 ** Operates in landscape mode with left to right, bottom to top text direction
 ** Displays unrecognised characters as a blank square
 ** Traverses single pages bidirectionally using user input (j,k)
 ** Provides a two pixel indicator of book position at the bottom of the display
-** Powers down device safely upon program termination
-** Powers down device safely upon error
+** Powers down device safely when reviecing SIGNINT
+** Powers down device safely upon hardware/software error
 ** Retains page position on restart
-** Error codes output to terminal
+** Error codes output to terminal with explanation
 * Technical Specification
 ** Hardware
 *** Controller
