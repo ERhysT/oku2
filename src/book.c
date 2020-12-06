@@ -45,7 +45,7 @@ book_getchar(FILE* book_to_read, unicode *codepoint_out)
     *codepoint_out = utf8tocp(utf8, utf8len);
 
 #ifdef DEBUG
-    printf("'%c' UTF-8: 0x%02hhX%02hhX02%hhX%02hhX -> U+%08X\n",
+    printf("UTF-8: '%c' 0x%02hhX%02hhX02%hhX%02hhX -> U+%08X\n",
 	   utf8[0], utf8[1], utf8[2], utf8[3], *codepoint_out,
 	   (*codepoint_out & 0xFFFFFF00) ? '?' : *codepoint_out & 0xFF);
 #endif
