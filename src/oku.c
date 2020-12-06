@@ -122,7 +122,7 @@ main(int argc, char *argv[])
 	    /*
 	      Load bitmap of the next character
 	    */
-	    status = book_getchar(book, &glyph.codepoint);
+	    status = book_get_codepoint(book, &glyph.codepoint);
 	    if (status)	goto epd_shutdown;
 	    status = unifont_render(font, &glyph);
 	    if (status)	goto epd_shutdown;

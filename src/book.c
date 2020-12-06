@@ -24,7 +24,7 @@ book_open(const char *path_to_open, FILE **file_out)
 
 /* Reads the next codepoint in the book */
 ErrCode
-book_getchar(FILE* book_to_read, unicode *codepoint_out)
+book_get_codepoint(FILE* book_to_read, unicode *codepoint_out)
 {
     ErrCode    status;
     unsigned   utf8len, i;

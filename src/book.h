@@ -12,7 +12,7 @@
 
 /* Opening UTF-8 encoded file */
 ErrCode book_open(const char *path_to_open, FILE **file_out);
-ErrCode book_getchar(FILE* book_to_read, unicode *codepoint_out);
+ErrCode book_get_codepoint(FILE* book_to_read, unicode *codepoint_out);
 void book_close(FILE **book_to_close);
 
 #endif	/* BOOK_H */
