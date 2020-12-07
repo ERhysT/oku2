@@ -14,7 +14,7 @@
 
 #include "gpio.h"
 #include "spi.h"
-#include "oku_types.h"
+#include "oku.h"
 #include "err.h"
 
 #include "epd.h"

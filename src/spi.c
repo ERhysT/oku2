@@ -15,7 +15,7 @@
 #include <linux/spi/spidev.h>
 #include <string.h>		/* for memset() */
 
-#include "oku_types.h"
+#include "oku.h"
 #include "err.h"
 #include "spi.h"
 

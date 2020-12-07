@@ -11,7 +11,7 @@
 #include <stddef.h>
 #include <gpiod.h>
 
-#include "oku_types.h"
+#include "oku.h"
 #include "err.h"
 #include "gpio.h"
 

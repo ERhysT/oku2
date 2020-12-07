@@ -7,7 +7,7 @@
 #ifndef EPD_H
 #define EPD_H
 
-#include "oku_types.h"
+#include "oku.h"
 #include "err.h"
 
 ErrCode epd_start(struct Point *px_out);

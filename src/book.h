@@ -8,7 +8,7 @@
 #define BOOK_H
 
 #include "err.h"
-#include "oku_types.h"
+#include "oku.h"
 
 /* Opening and closing UTF-8 encoded file */
 ErrCode book_open(const char *path_to_open, FILE **file_out);

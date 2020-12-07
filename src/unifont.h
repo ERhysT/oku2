@@ -8,7 +8,7 @@
 #define UNIFONT_H
 
 #include "err.h"
-#include "oku_types.h"
+#include "oku.h"
 
 ErrCode unifont_open(const char *path_to_open, FILE **file_out);
 void    unifont_close(FILE **font_to_close);

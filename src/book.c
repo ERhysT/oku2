@@ -7,7 +7,7 @@
 #include <stdio.h>
 
 #include "err.h"
-#include "oku_types.h"
+#include "oku.h"
 
 #include "book.h"
 

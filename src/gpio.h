@@ -8,7 +8,7 @@
 
 #include <stddef.h>
 
-#include "oku_types.h"
+#include "oku.h"
 #include "err.h"
 
 /* Input: pi->epd, Output: epd->pi */

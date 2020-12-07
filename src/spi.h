@@ -13,7 +13,7 @@
 
 #include <stddef.h>
 
-#include "oku_types.h"
+#include "oku.h"
 #include "err.h"
 
 ErrCode SPI_start(const char *device, uint64_t speed_mhz);

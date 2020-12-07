@@ -8,12 +8,12 @@
 #include <unistd.h>
 #include <termios.h>
 
+#include "oku.h"
+#include "err.h"
+
 #include "epd.h"
 #include "book.h"
 #include "unifont.h"
-
-#include "oku_types.h"
-#include "err.h"
 
 #define DEFAULT_BOOK       "./book.utf8"
 #define DEFAULT_FONT       "./unifont.hex"
