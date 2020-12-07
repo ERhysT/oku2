@@ -11,9 +11,10 @@
 
 #include "book.h"
 
-static ErrCode read_utf8_octet(FILE *book_to_read, byte *buf);
+static ErrCode  read_utf8_octet(FILE *book_to_read, byte *buf);
 static unsigned utf8_sequence_length(byte first);
-static unicode utf8tocp(byte *utf8, unsigned len);
+static unicode  utf8tocp(byte *utf8, unsigned len);
+static void     cptoutf8(unicode codepoint, byte (*utf8)[4]);
 
 ErrCode
 book_open(const char *path_to_open, FILE **file_out)
@@ -52,6 +53,29 @@ book_get_codepoint(FILE* book_to_read, unicode *codepoint_out)
 
  err:
     return status;
+}
+
+/* Rewinds the file handle back one codepoint.
+
+   UTF-8 is a variable length encoding, so the number of bytes to
+   rewind must first be calculated.  */
+ErrCode
+book_unget_codepoint(FILE* book_to_write, unicode codepoint) 
+{
+    unsigned len; 
+    byte     utf8[4] = { 0x00, 0x00, 0x00, 0x00 };
+
+    cptoutf8(codepoint, &utf8);
+    len = utf8_sequence_length(utf8[0]);
+
+#ifdef DEBUG
+    printf("UTF-8: '%c' 0x%02hhX%02hhX02%hhX%02hhX <- U+%08X\n",
+	   utf8[0], utf8[1], utf8[2], utf8[3], codepoint,
+	   (codepoint & 0xFFFFFF00) ? '?' : codepoint & 0xFF);
+#endif
+
+    return fseek(book_to_write, -1L * len, SEEK_CUR)
+	? E_IO : SUCCESS;
 }
 
 void
@@ -143,4 +167,39 @@ utf8tocp(byte *utf8, unsigned len)
     }
 
     return codepoint;
+}
+
+/* Encodes a single unicode codepoint as UTF-8 and stores it in an
+   octet array of length 4 pointed to by utf8. Unused bytes are
+   zeroed.
+   
+   If above the valid range, data at utf8 is unchanged.
+
+   Codepoint Range      1B       2B       3B       4B        Codepoint x's
+   U+010000 -> U+10FFFF 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx  21 bits 
+   U+000800 -> U+00FFFF 1110xxxx 10xxxxxx 10xxxxxx           16 bits 
+   U+000080 -> U+0007FF 110xxxxx 10xxxxxx                    11 bits
+   U+000000 -> U+00007F 0xxxxxxx                             7  bits     */
+static void
+cptoutf8(unicode codepoint, byte (*utf8)[4])
+{
+    if (codepoint > 0x10FFFF) {	       /* Invalid - too long */
+	return;
+    } else if (codepoint > 0x00FFFF) { /* 4B */
+	(*utf8)[0] = 0xFF & ((codepoint >> (21-3 )) | 0xF0);
+	(*utf8)[1] = 0xFF & ((codepoint >> (21-9 )) | 0x80); 
+	(*utf8)[2] = 0xFF & ((codepoint >> (21-15)) | 0x80);
+	(*utf8)[3] = 0xFF & ((codepoint >> (21-21)) | 0x80);
+    } else if (codepoint > 0x0007FF) { /* 3B */
+	(*utf8)[0] = 0xFF & ((codepoint >> (16-4 )) | 0xE0);
+	(*utf8)[1] = 0xFF & ((codepoint >> (16-10)) | 0x80);
+	(*utf8)[2] = 0xFF & ((codepoint >> (16-16)) | 0x80);
+    } else if (codepoint > 0x0007FF) { /* 2B */
+	(*utf8)[0] = 0xFF & ((codepoint >> (11-5 )) | 0xF0);
+	(*utf8)[1] = 0xFF & ((codepoint >> (11-11)) | 0x80);
+    } else {			       /* 1B */
+	(*utf8)[0] = 0x7F & codepoint;
+    }
+
+    return;
 }

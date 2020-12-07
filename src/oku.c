@@ -135,7 +135,7 @@ main(int argc, char *argv[])
 	    }
 	    if (pen.y+glyph.render.size.y > paper.y) {
 		free(glyph.render.bitmap); 
-		//status = book_ungetchar(book, glyph.codepoint);
+		book_unget_codepoint(book, glyph.codepoint);
 		break;
 	    }
 
@@ -170,10 +170,7 @@ main(int argc, char *argv[])
  os_cleanup:
     unifont_close(&font);
     book_close(&book);
-    
-    
     reset_input_mode(&old_tattr);
-
     err_print(status);
 
     return status;
