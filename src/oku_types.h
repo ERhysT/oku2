@@ -15,7 +15,7 @@
 /* unicode codepoint (maximum 21bits U+10FFFF) */
 typedef uint32_t unicode;
 
-/* Must be an eight bit byte */
+/* Must be an octet */
 typedef unsigned char byte;
 
 /* Coordinate system large enough to describe all pixel coordinates */
@@ -26,14 +26,8 @@ struct Point {
     coordinate     y;		/* The ordinate */
 };
 
-/* A rectangle defined by the points of opposing verticies */
-//struct Area {
-//    struct Point   topleft;
-//    struct Point   bottomright;
-//};
-
 struct Raster {
-    struct Point   size;		/* px from top left origin */
+    struct Point   size;	/* px from top left origin */
     byte          *bitmap; 
 };
 
@@ -43,4 +37,10 @@ struct Glyph {
     struct Raster  render;
 };
 
+/* Bookmark */
+struct Bookmark {
+    const char    *book_path;
+    long           position;
+}
+    
 #endif	/* OKU_TYPES_H */

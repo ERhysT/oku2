@@ -10,10 +10,18 @@
 #include "err.h"
 #include "oku_types.h"
 
-/* Opening UTF-8 encoded file */
+/* Opening and closing UTF-8 encoded file */
 ErrCode book_open(const char *path_to_open, FILE **file_out);
+void    book_close(FILE **book_to_close);
+
+/* Unicode operations */
 ErrCode book_get_codepoint(FILE* book_to_read, unicode *codepoint_out);
 ErrCode book_unget_codepoint(FILE* book_to_write, unicode codepoint); 
-void    book_close(FILE **book_to_close);
+
+/* Bookmarking */
+ErrCode book_new_mark(FILE* book, struct Bookmark *out);
+ErrCode book_apply_mark(FILE *book, const struct Bookmark *moveto);
+ErrCode book_save_mark(FILE *dest, const struct Bookmark *src);
+ErrCode book_load_mark(FILE *src, struct Bookmark *dest);
 
 #endif	/* BOOK_H */
