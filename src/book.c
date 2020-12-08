@@ -5,20 +5,32 @@
 /* book.c - decodes UTF-8 ebook text files into unicode codepoints */
 
 #include <stdio.h>
+#include <assert.h>
 
 #include "err.h"
 #include "oku.h"
 
 #include "book.h"
 
+/* UTF-8 */
 static ErrCode  read_utf8_octet(FILE *book_to_read, byte *buf);
 static unsigned utf8_sequence_length(byte first);
 static unicode  utf8tocp(byte *utf8, unsigned len);
 static void     cptoutf8(unicode codepoint, byte (*utf8)[4]);
 
+/* file operations */
+static ErrCode flength(FILE *tomeasure, long *len_out);
+static ErrCode fcksum(FILE *tohash, long *hash_out);
+static void    fcloseifexists(FILE **toclose);
+/* Linked list for Bookmarks */
+static ErrCode new_bmlist(FILE *book, struct Bookmarks *new);
+static ErrCode load_bmlist(FILE *src, struct Bookmarks *dest);
+
 ErrCode
 book_open(const char *path_to_open, FILE **file_out)
 {
+    assert(file_out && "Dereferenced null pointer");
+
     *file_out = fopen(path_to_open, "r");
     return *file_out ? SUCCESS : E_PATH;
 }
@@ -30,6 +42,8 @@ book_get_codepoint(FILE* book_to_read, unicode *codepoint_out)
     ErrCode    status;
     unsigned   utf8len, i;
     byte       utf8[4] = { 0x00, 0x00, 0x00, 0x00 };
+
+    assert(codepoint_out && book_to_read && "Dereferenced null pointer");
 
     status = read_utf8_octet(book_to_read, utf8);
     if (status)
@@ -65,6 +79,8 @@ book_unget_codepoint(FILE* book_to_write, unicode codepoint)
     unsigned len; 
     byte     utf8[4] = { 0x00, 0x00, 0x00, 0x00 };
 
+    assert(book_to_write && "Dereferenced null pointer");
+
     cptoutf8(codepoint, &utf8);
     len = utf8_sequence_length(utf8[0]);
 
@@ -81,16 +97,109 @@ book_unget_codepoint(FILE* book_to_write, unicode codepoint)
 void
 book_close(FILE **book_to_close)
 {
-    if (!book_to_close || !*book_to_close)
+    return fcloseifexists(book_to_close);
+}
+
+/* BOOKMARKING INTERFACE IMPLEMENTATION */
+
+/* Opens bookmark file for reading and writing at the start of the
+   file, or creates it if it doesn't exist. */
+ErrCode
+bookmarks_open(const char *path_to_open, FILE **file_out)
+{
+    assert(path_to_open && file_out && "Dereferenced null pointer");
+
+    *file_out = fopen(path_to_open, "w+");
+
+    return *file_out ? SUCCESS : E_PATH;
+}
+
+/* Load any bookmarks in the bookmarks file after checking that the
+   checksums match */
+ErrCode
+bookmarks_load(FILE *book, FILE *marks, struct Bookmarks *dest)
+{
+    ErrCode  status;
+    long     mflen, cksum;
+
+    assert(book && marks && dest && "Dereferenced null pointer");
+
+    status = flength(marks, &mflen);
+    if (status)
+	return status;
+    if (mflen == 0)		/* empty file */
+	return new_bmlist(book, dest);
+
+    if (fread(&dest->cksum, sizeof dest->cksum, 1, marks) != 1)
+	return E_IO;
+    status = fcksum(book, &cksum);
+    if (status) {
+	rewind(marks); 
+	return status;
+    }
+    if (dest->cksum != cksum) /* files dont match */
+	return new_bmlist(book, dest);
+	
+    return load_bmlist(book, dest);
+}
+
+ErrCode
+bookmarks_save(FILE *dest, const struct Bookmarks *src)
+{
+    (void)dest;
+    (void)src;
+    return E_TODO;
+}
+
+void
+bookmarks_close(FILE **toclose)
+{
+    return fcloseifexists(toclose);
+}
+
+/* STATIC FUNCTIONS */
+
+/* Returns the number of bytes in a file. */
+static ErrCode
+flength(FILE *tomeasure, long *len_out)
+{
+    long start_len;
+
+    assert(tomeasure && len_out && "Dereferenced null pointer");
+
+    start_len = ftell(tomeasure);
+    if (fseek(tomeasure, 0L, SEEK_END) == -1)
+	return E_IO;
+    *len_out = ftell(tomeasure);
+    if (fseek(tomeasure, start_len, SEEK_SET) == -1)
+	return E_IO;
+
+    return SUCCESS;
+}
+
+/* checksum */
+static ErrCode
+fcksum(FILE *tohash, long *hash)
+{
+    //At the moment this is just the file length
+    return flength(tohash, hash);
+}
+
+static void 
+fcloseifexists(FILE **toclose)
+{
+    if (!toclose || !*toclose)
 	return; 
 
-    fclose(*book_to_close);
-    *book_to_close = NULL;
+    fclose(*toclose);
+    *toclose = NULL;
 
     return;
 }
 
-/* STATIC FUNCTIONS */
+/*
+   UTF-8 ENCODING AND DECODING
+*/
 
 /* Read a single byte into buffer */
 static ErrCode
@@ -202,4 +311,24 @@ cptoutf8(unicode codepoint, byte (*utf8)[4])
     }
 
     return;
+}
+
+/*
+   LINKED LIST IMPLEMENTATION FOR MARKS
+*/
+
+static ErrCode
+new_bmlist(FILE *book, struct Bookmarks *new)
+{
+    (void)book;
+    (void)new;
+    return E_TODO;
+}
+
+static ErrCode
+load_bmlist(FILE *src, struct Bookmarks *dest)
+{
+    (void)src;
+    (void)dest;
+    return E_TODO;
 }

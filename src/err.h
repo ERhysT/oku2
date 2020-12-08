@@ -9,6 +9,7 @@
 
 typedef enum err_code {	
     SUCCESS = 0,
+    E_TODO,
     E_ARG,
     E_SPI,
     E_IO,
@@ -24,7 +25,7 @@ typedef enum err_code {
     E_EOF,
     E_MEM,
     E_MISSINGCHAR,
-    E_UNIFONT,
+    E_UNIFONT
 } ErrCode;
 
 /* Print error strings */

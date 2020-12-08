@@ -13,6 +13,7 @@
 /* Error strings aligned with ErrorCode enumeration in err.h */
 static const char *errcode_str[] =
     { "Success",
+      "Feature not implemented",
       "Invalid arguments",
       "SPI I/O failure",
       "Linux I/O failure",

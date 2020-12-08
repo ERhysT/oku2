@@ -37,10 +37,16 @@ struct Glyph {
     struct Raster  render;
 };
 
-/* Bookmark */
-struct Bookmark {
-    const char    *book_path;
-    long           position;
+/* Bookmark (doubly linked list) */
+struct Mark {
+    long           fpos;
+    struct Mark   *next, *prev;
+};
+
+struct Bookmarks {
+    long             cksum;
+    const char      *book_path;
+    struct Mark     *head;
 };
     
 #endif	/* OKU_TYPES_H */
