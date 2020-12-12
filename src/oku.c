@@ -83,14 +83,12 @@ page_fward(void)
 {
     puts("\nMoving forward one page");
     while(!sig) {
-	/*
-	  Load the bitmap of the next character in the book
-	*/
+
+	/* Load the bitmap of the next character in the book*/
 	ERR_CHECK( book_get_codepoint(&book, &glyph.codepoint));
 	ERR_CHECK( unifont_render(&font, &glyph));
-	/*
-	  Check space for glyph before writing
-	*/
+
+	/*  Check space for glyph before writing */
 	if (pen.x+glyph.render.size.x > paper.x) { /* newline */
 	    pen.y += glyph.render.size.y;
 	    pen.x  = 0;
@@ -101,14 +99,11 @@ page_fward(void)
 	    break;
 	}
 	pen_print();
-	/*
-	    Write glyph to epd buffer
-	*/
+
+	/* Write glyph to epd buffer */
 	ERR_CHECK( epd_write(&glyph.render, pen));
-	/* 
-	   Increment pen after saving page bookmark 
-	*/
-	ERR_CHECK( bookmarks_push(&book, &pages));
+
+	/* Increment pen */
 	pen.x += glyph.render.size.x;
 	free(glyph.render.bitmap);
     }
@@ -176,7 +171,8 @@ main(int argc, char *argv[])
 	default:  puts("Unrecognised character.");      continue;
 	}
 
-	ERR_CHECK(epd_refresh()); /* updates epd */
+	ERR_CHECK( epd_refresh()); /* updates epd */
+	ERR_CHECK( bookmarks_push(&book, &pages));
     } 
 
     die(SUCCESS);
