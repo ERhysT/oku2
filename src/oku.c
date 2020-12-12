@@ -64,6 +64,25 @@ reset_input_mode(const struct termios *old_attr)
     tcsetattr(STDIN_FILENO, TCSANOW, old_attr);
 }
 
+ErrCode
+page_fward(void)
+{
+    puts("Moving forward one page");
+    return SUCCESS;
+}
+
+ErrCode
+page_bward(void)
+{
+    puts("Moving backwards one page");
+    return SUCCESS;
+}
+
+void
+die(void)
+{
+    return;
+}
 int
 main(int argc, char *argv[])
 {
@@ -73,11 +92,11 @@ main(int argc, char *argv[])
 
     /* File paths and streams */
     const char         *font_path, *book_path;
-    FILE               *fontfh;    
 
     /* Interface objects */
     struct Book         book;	    /* text file */
     struct Point        pen, paper; /* epd cursor, limits  */
+    struct Unifont      font;	    /* unifont file and cache */
     struct Glyph        glyph;	    /* single rendered character */
     struct Bookmarks    pages;	    /* file position log */
 
@@ -96,7 +115,7 @@ main(int argc, char *argv[])
 
     status = book_open(book_path, &book); 
     if (status)	goto os_cleanup;
-    status = unifont_open(font_path, &fontfh);
+    status = unifont_open(font_path, &font);
     if (status)	goto os_cleanup;
 
     status = bookmarks_open(&book, &pages);
@@ -118,20 +137,25 @@ main(int argc, char *argv[])
 	fputs("Input: next(k) previous(j) quit(q)... ", stdout);
 	fflush(stdout);
 	switch (getchar()) {
-	case 'j': puts("Not implemented.");          continue;
-	case 'k': puts("Moving forward one page.");  break;
-	case 'q': puts("Powering down device.");     goto epd_shutdown;
-	case EOF: status = E_IO;                     goto epd_shutdown;
+	case 'j': status = page_bward();             break;
+	case 'k': status = page_fward();             break;
+	case 'q': die();                             break;
 	default:  puts("Unrecognised character.");   continue;
 	}
 
+	if (status)
+	    goto epd_shutdown;
+
+	/* 
+	   Loop breaks when epd is full of characters  
+	*/
 	while(!sigint) {
 	    /*
 	      Load bitmap of the next character
 	    */
 	    status = book_get_codepoint(&book, &glyph.codepoint);
 	    if (status)	goto epd_shutdown;
-	    status = unifont_render(fontfh, &glyph);
+	    status = unifont_render(&font, &glyph);
 	    if (status)	goto epd_shutdown;
 	    /*
 	      Check pen position before writing
@@ -169,15 +193,15 @@ main(int argc, char *argv[])
 	if (status) goto epd_shutdown;
 
     } while (!sigint);
-
-    /* event loop broken, exit cleanly */
-
+    /*
+       Event loop broken, exit cleanly
+    */
  epd_shutdown:
     err_print(epd_stop());
 
  os_cleanup:
     bookmarks_close(&pages);
-    unifont_close(&fontfh);
+    unifont_close(&font);
     book_close(&book);
     reset_input_mode(&old_tattr);
 

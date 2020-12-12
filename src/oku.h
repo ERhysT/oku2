@@ -27,10 +27,13 @@ struct Raster {
     byte             *bitmap; 	/* horizontally packed map */
 };
 
-/* Bitmap data for one character glyph */
 struct Glyph {
     unicode           codepoint;
     struct Raster     render;
+};
+
+struct Unifont {
+    FILE             *fh;	/* unifont hexfile */
 };
 
 struct Book {

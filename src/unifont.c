@@ -49,50 +49,44 @@
 #define DELIMITER       ':'
 
 ErrCode
-unifont_open(const char *path_to_open, FILE **file_out)
+unifont_open(const char *path_to_open, struct Unifont *new)
 {
-    *file_out = fopen(path_to_open, "r");
-    return *file_out ? SUCCESS : E_PATH;
+    new->fh = fopen(path_to_open, "r");
+    return new->fh ? SUCCESS : E_PATH;
 }
 
 void
-unifont_close(FILE **font_to_close)
+unifont_close(struct Unifont *toclose)
 {
-    if (!font_to_close || !*font_to_close)
-	return; 
-
-    fclose(*font_to_close);
-    *font_to_close = NULL;
-
-    return;
+    if (toclose->fh) {
+	fclose(toclose->fh);
+	toclose->fh = NULL;
+    }
 }
 
-/* Populates the Raster for a Glyph. Retrieves bitmap
-   comlimentary to the codepoint defined in the Glyph structure from a
-   GNU Unicode .hex file. */
+/* Populates the Raster for a Glyph. Retrieves bitmap comlimentary to
+   the codepoint defined in the Glyph structure from a GNU Unicode
+   .hex file. */
 ErrCode
-unifont_render(FILE* fh, struct Glyph *out)
+unifont_render(struct Unifont *font, struct Glyph *out)
 {
     ErrCode       status;
     char          line[LINEMAX+1], *line_cur;
     byte         *bmp_cur; 
     size_t        bmp_len;
 
-    if (!out || !out->codepoint)
-	return E_ARG;
-
-    rewind(fh);
+    rewind(font->fh);
 
     /* Find the uhex line with the matching codepoint */
     do {
-	if (fgets(line, LINEMAX+1, fh) == NULL) {
-	    if (feof(fh)) {	/* determine input error type */
+	if (fgets(line, LINEMAX+1, font->fh) == NULL) {
+	    if (feof(font->fh)) { /* determine input error type */
 		status = E_MISSINGCHAR;
 	    } else {
 		status = E_IO;
 	    }
 
-	    rewind(fh);
+	    rewind(font->fh);
 	    return status;
 	}
 
@@ -136,7 +130,7 @@ unifont_render(FILE* fh, struct Glyph *out)
     default:
 	free(out->render.bitmap);
 	out->render.bitmap = NULL;
-	rewind(fh);
+	rewind(font->fh);
 	return E_FFORMAT;
     }
 
@@ -147,6 +141,6 @@ unifont_render(FILE* fh, struct Glyph *out)
     printf("\n");
 #endif
 
-    rewind(fh);
+    rewind(font->fh);
     return SUCCESS;
 }

@@ -10,9 +10,9 @@
 #include "err.h"
 #include "oku.h"
 
-ErrCode unifont_open(const char *path_to_open, FILE **file_out);
-void    unifont_close(FILE **font_to_close);
-ErrCode unifont_render(FILE* fh, struct Glyph *out);
+ErrCode unifont_open(const char *path_to_open, struct Unifont *new);
+void    unifont_close(struct Unifont *toclose);
+ErrCode unifont_render(struct Unifont *font, struct Glyph *out);
 
 
 #endif /* UNIFONT_H */
