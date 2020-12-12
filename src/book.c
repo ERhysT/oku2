@@ -166,10 +166,9 @@ bookmarks_push(const struct Book *position, struct Bookmarks *addto)
 	++addto->n;
     
 #ifdef DEBUG
-    printf("Stack Push: %lu [%u/%u]\n",
+    printf("Bookmark: %s %lu [%u/%u]\n", addto->fname,
 	   addto->stack[addto->n], addto->n, addto->len);
 #endif
-    
 
     return SUCCESS;
 }
