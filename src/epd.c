@@ -145,6 +145,7 @@ const byte lut_partial_update[LUT_LEN] = {
 };
 
 byte *fbuf;			/* screen buffer */
+int epdon;			/* non zero when device is powered  */
 
 /* FORWARD DECLARATIONS */
 static ErrCode init_gpio(void);
@@ -284,12 +285,12 @@ epd_refresh(void)
 ErrCode
 epd_stop(void)
 {
-    ErrCode status;
+    ErrCode status = SUCCESS;
 
+    if (epdon)
+	status = dev_poweroff();
     if (fbuf)
 	free(fbuf);
-
-    status = dev_poweroff();
     GPIO_stop();
     SPI_stop();
 
@@ -376,6 +377,8 @@ static ErrCode
 dev_init(void)
 {
     ErrCode status;
+
+    epdon = 1;
 
     status = transmit_command(DRIVER_OUTPUT_CONTROL);
     if (status)
@@ -526,7 +529,7 @@ dev_poweroff(void)
     status = transmit_data(deep_sleep_mode, sizeof deep_sleep_mode);
 
  err:
-    return status ? E_SLEEP : SUCCESS;
+    return status ? E_SLEEP : (epdon=0, SUCCESS);
 }
 
 /* Transmits a command byte to the epd.

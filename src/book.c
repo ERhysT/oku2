@@ -11,7 +11,6 @@
 
 #include "err.h"
 #include "oku.h"
-#include "llist.h"
 
 #include "book.h"
 
@@ -19,7 +18,7 @@
 #define STACK_INITIAL     10
 
 /* UTF-8 */
-static ErrCode   read_utf8_octet(FILE *book_to_read, byte *buf);
+static ErrCode   fread_utf8_octet(FILE *book_to_read, byte *buf);
 static unsigned  utf8_sequence_length(byte first);
 static unicode   utf8tocp(byte *utf8, unsigned len);
 static void      cptoutf8(unicode codepoint, byte (*utf8)[4]);
@@ -32,6 +31,7 @@ static void     fcloseifexists(FILE **toclose);
 /* bookmarking stack and io */
 static ErrCode  load_bmstack(struct Bookmarks *out);
 static ErrCode  save_bmstack(struct Bookmarks *out);
+static ErrCode  grow_bmstack(long *stack, size_t newlen);
 
 /* Generate a book object from filepath */
 ErrCode
@@ -60,14 +60,14 @@ book_get_codepoint(struct Book *toread, unicode *codepoint_out)
 
     assert_ptr(codepoint_out && toread && toread->fh);
 
-    status = read_utf8_octet(toread->fh, utf8);
+    status = fread_utf8_octet(toread->fh, utf8);
     if (status)
 	goto err;
 
     utf8len = utf8_sequence_length(utf8[0]);
 	    
     for (i=1; i<utf8len; ++i) {
-	status = read_utf8_octet(toread->fh, utf8 + i);
+	status = fread_utf8_octet(toread->fh, utf8 + i);
 	if (status)
 	    goto err;
     }
@@ -144,22 +144,51 @@ bookmarks_open(const struct Book *opened, struct Bookmarks *new)
     return load_bmstack(new);	/* loads previously saved data */
 }
 
+/* Pushes a new bookmark to the bookmark stack */
+ErrCode
+bookmarks_push(const struct Book *position, struct Bookmarks *addto)
+{
+    ErrCode status;
+    /*
+      Grow stack if full
+     */
+    if (addto->n == addto->len) {
+	addto->len *= 2;
+	status = grow_bmstack(addto->stack, addto->len);
+	if (status)
+	    return status;
+    }
+    
+    addto->stack[addto->n] = ftell(position->fh);
+    if (addto->stack[addto->n] == -1)
+	return E_IO;
+    else
+	++addto->n;
+    
+#ifdef DEBUG
+    printf("Stack Push: %lu [%u/%u]\n",
+	   addto->stack[addto->n], addto->n, addto->len);
+#endif
+    
+
+    return SUCCESS;
+}
+    
+
 /* Saves any bookmarks in the stack to disk and and frees all
-   dynamically allocated memory associated with the structure. */
+   dynamically allocated memory associated with the structure.  */
 void
 bookmarks_close(struct Bookmarks *toclose)
 {
     assert_ptr(toclose!=NULL);
 
-    if (toclose->fh) 
+    if (toclose->fh) {
 	if (toclose->n > 0) 	/* stack populated: write to file  */
 	    save_bmstack(toclose);
-
-    if (toclose->fh)
 	fclose(toclose->fh);
-    if (toclose->n == 0)	/* stack empty: delete empty file */
-	remove(toclose->fname);
-
+	if (toclose->n == 0)	/* stack empty: delete empty file */
+	    remove(toclose->fname);
+    }
     if (toclose->stack)
 	free(toclose->stack);
     if (toclose->fname)
@@ -220,8 +249,6 @@ fname_create(checksum name, const char *ext)
     return str;
 }
 
-//res = snprintf(*out, len+1, CKSUM_FMT "%s", name, STACK_FEXT);
-
 /* Closes file and sets stream ptr to null - or does nothing if
    already null. */
 static void 
@@ -242,7 +269,7 @@ fcloseifexists(FILE **toclose)
 
 /* Read a single byte into buffer */
 static ErrCode
-read_utf8_octet(FILE *fh, byte *buf)
+fread_utf8_octet(FILE *fh, byte *buf)
 {
     int n;
     assert_ptr(fh && buf);
@@ -371,6 +398,7 @@ cptoutf8(unicode codepoint, byte (*utf8)[4])
 static ErrCode
 load_bmstack(struct Bookmarks *out)
 {
+    ErrCode status;
     /* 
        Determine how much to read from file
     */
@@ -381,9 +409,9 @@ load_bmstack(struct Bookmarks *out)
     /*
        Resize buffer to fit the stack on file before reading file
     */
-    out->stack = realloc(out->stack, out->len * (sizeof *out->stack));
-    if (!out->stack)
-	return E_MEM;
+    status = grow_bmstack(out->stack, out->len);
+    if (status)
+	return status;;
     if (out->len == 0)
 	return E_FFORMAT;
     if (fread(out->stack, sizeof *out->stack, out->len, out->fh) != out->len)
@@ -414,4 +442,12 @@ save_bmstack(struct Bookmarks *out)
     return SUCCESS;
  err:
     return E_IO;
+}
+
+/* Resizes stack to fit 'newlen' entries. */
+static ErrCode
+grow_bmstack(long *stack, size_t newlen)
+{
+    stack = realloc(stack, newlen * (sizeof *stack));
+    return stack == NULL ? E_MEM : SUCCESS;
 }

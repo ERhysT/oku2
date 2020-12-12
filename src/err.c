@@ -24,7 +24,6 @@ static const char *errcode_str[] =
       "Failed to initialise signal handling",
       "Device or resource uninitialised",
       "CRITICAL: sleep failed - remove power supply",
-      "Not a terminal or misconfigured terminal",
       "Invalid file name",
       "Invalid UTF-8 file",
       "End of file",
@@ -32,8 +31,9 @@ static const char *errcode_str[] =
       "Unicode codepoint undefined in font",
       "Invalid file format",
       "File is empty",
-      "Corrupt .oku file (manually delete)" 
-      "Buffer overflow prevented or detected"
+      "Corrupt .oku file (manually delete)",
+      "Buffer overflow prevented or detected",
+      "Unreachable code reached"
     };
 
 /* Prints error strings to stderr. */

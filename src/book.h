@@ -20,4 +20,7 @@ ErrCode book_unget_codepoint(struct Book *towrite, unicode codepoint);
 /* Bookmarking (saving position to disk) */
 ErrCode bookmarks_open(const struct Book *opened, struct Bookmarks *out);
 void    bookmarks_close(struct Bookmarks *toclose);
+
+ErrCode bookmarks_push(const struct Book *position, struct Bookmarks *addto);
+
 #endif	/* BOOK_H */

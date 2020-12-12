@@ -19,7 +19,6 @@ typedef enum err_code {
     E_SIG,
     E_INIT,
     E_SLEEP,
-    E_TERM,
     E_PATH,
     E_UTF8,
     E_EOF,
@@ -28,7 +27,8 @@ typedef enum err_code {
     E_FFORMAT,
     E_MT,
     E_HASH,
-    E_OVERFLOW
+    E_OVERFLOW,
+    E_UNREACHABLE
 } ErrCode;
 
 void err_print(ErrCode status);	    /* Print error strings */
