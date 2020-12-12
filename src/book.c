@@ -6,53 +6,68 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
+#include <stdlib.h>
 
 #include "err.h"
 #include "oku.h"
+#include "llist.h"
 
 #include "book.h"
 
+#define STACK_FEXT        ".oku" /* stack save file extension */
+#define STACK_INITIAL     10
+
 /* UTF-8 */
-static ErrCode  read_utf8_octet(FILE *book_to_read, byte *buf);
-static unsigned utf8_sequence_length(byte first);
-static unicode  utf8tocp(byte *utf8, unsigned len);
-static void     cptoutf8(unicode codepoint, byte (*utf8)[4]);
+static ErrCode   read_utf8_octet(FILE *book_to_read, byte *buf);
+static unsigned  utf8_sequence_length(byte first);
+static unicode   utf8tocp(byte *utf8, unsigned len);
+static void      cptoutf8(unicode codepoint, byte (*utf8)[4]);
 
 /* file operations */
-static ErrCode flength(FILE *tomeasure, long *len_out);
-static ErrCode fcksum(FILE *tohash, long *hash_out);
-static void    fcloseifexists(FILE **toclose);
-/* Linked list for Bookmarks */
-static ErrCode new_bmlist(FILE *book, struct Bookmarks *new);
-static ErrCode load_bmlist(FILE *src, struct Bookmarks *dest);
+static ErrCode  flrc(FILE *fh, checksum *lrc, size_t *len);
+static char    *fname_create(checksum name, const char *ext);
+static void     fcloseifexists(FILE **toclose);
 
+/* bookmarking stack and io */
+static ErrCode  load_bmstack(struct Bookmarks *out);
+static ErrCode  save_bmstack(struct Bookmarks *out);
+
+/* Generate a book object from filepath */
 ErrCode
-book_open(const char *path_to_open, FILE **file_out)
+book_open(const char *path, struct Book *new)
 {
-    assert(file_out && "Dereferenced null pointer");
+    ErrCode status;
 
-    *file_out = fopen(path_to_open, "r");
-    return *file_out ? SUCCESS : E_PATH;
+    assert_ptr(path != NULL);
+
+    new->fh = fopen(path, "r");
+    if (!new->fh)
+	return E_PATH;
+
+    status = flrc(new->fh, &new->fhash, &new->len);    
+
+    return status;
 }
 
 /* Reads the next codepoint in the book */
 ErrCode
-book_get_codepoint(FILE* book_to_read, unicode *codepoint_out)
+book_get_codepoint(struct Book *toread, unicode *codepoint_out)
 {
     ErrCode    status;
     unsigned   utf8len, i;
     byte       utf8[4] = { 0x00, 0x00, 0x00, 0x00 };
 
-    assert(codepoint_out && book_to_read && "Dereferenced null pointer");
+    assert_ptr(codepoint_out && toread && toread->fh);
 
-    status = read_utf8_octet(book_to_read, utf8);
+    status = read_utf8_octet(toread->fh, utf8);
     if (status)
 	goto err;
 
     utf8len = utf8_sequence_length(utf8[0]);
 	    
     for (i=1; i<utf8len; ++i) {
-	status = read_utf8_octet(book_to_read, utf8 + i);
+	status = read_utf8_octet(toread->fh, utf8 + i);
 	if (status)
 	    goto err;
     }
@@ -74,12 +89,12 @@ book_get_codepoint(FILE* book_to_read, unicode *codepoint_out)
    UTF-8 is a variable length encoding, so the number of bytes to
    rewind must first be calculated.  */
 ErrCode
-book_unget_codepoint(FILE* book_to_write, unicode codepoint) 
+book_unget_codepoint(struct Book *writeto, unicode codepoint) 
 {
     unsigned len; 
     byte     utf8[4] = { 0x00, 0x00, 0x00, 0x00 };
 
-    assert(book_to_write && "Dereferenced null pointer");
+    assert_ptr(writeto && writeto->fh);
 
     cptoutf8(codepoint, &utf8);
     len = utf8_sequence_length(utf8[0]);
@@ -90,101 +105,125 @@ book_unget_codepoint(FILE* book_to_write, unicode codepoint)
 	   (codepoint & 0xFFFFFF00) ? '?' : codepoint & 0xFF);
 #endif
 
-    return fseek(book_to_write, -1L * len, SEEK_CUR)
+    return fseek(writeto->fh, -1L * len, SEEK_CUR)
 	? E_IO : SUCCESS;
 }
 
 void
-book_close(FILE **book_to_close)
+book_close(struct Book *toclose)
 {
-    return fcloseifexists(book_to_close);
+    fcloseifexists(&toclose->fh);
 }
 
 /* BOOKMARKING INTERFACE IMPLEMENTATION */
 
-/* Opens bookmark file for reading and writing at the start of the
-   file, or creates it if it doesn't exist. */
+/* Loads bookmarks (position stack) from disk using the opened
+   book's hash. If this is a new book with no bookmarks, an empty one
+   is allocated. */
 ErrCode
-bookmarks_open(const char *path_to_open, FILE **file_out)
+bookmarks_open(const struct Book *opened, struct Bookmarks *new)
 {
-    assert(path_to_open && file_out && "Dereferenced null pointer");
+    new->n     = 0;
+    new->len   = STACK_INITIAL;
+    new->stack = calloc(new->len, sizeof *new->stack);
+    if (!new->stack)
+	return E_MEM;
+    new->fname = fname_create(opened->fhash, STACK_FEXT);
+    if (!new->fname)
+	return E_MEM;
 
-    *file_out = fopen(path_to_open, "w+");
+    /* If this book has been opened before there should be a matching
+       structure saved to disk */
+    new->fh = fopen(new->fname, "r+");
+    if (!new->fh) {		/* new book, create new file */
+	err_clear_errno();
+	new->fh = fopen(new->fname, "w+");
+	return new->fh ? SUCCESS : E_IO;
+    } 
 
-    return *file_out ? SUCCESS : E_PATH;
+    return load_bmstack(new);	/* loads previously saved data */
 }
 
-/* Load any bookmarks in the bookmarks file after checking that the
-   checksums match */
-ErrCode
-bookmarks_load(FILE *book, FILE *marks, struct Bookmarks *dest)
-{
-    ErrCode  status;
-    long     mflen, cksum;
-
-    assert(book && marks && dest && "Dereferenced null pointer");
-
-    status = flength(marks, &mflen);
-    if (status)
-	return status;
-    if (mflen == 0)		/* empty file */
-	return new_bmlist(book, dest);
-
-    if (fread(&dest->cksum, sizeof dest->cksum, 1, marks) != 1)
-	return E_IO;
-    status = fcksum(book, &cksum);
-    if (status) {
-	rewind(marks); 
-	return status;
-    }
-    if (dest->cksum != cksum) /* files dont match */
-	return new_bmlist(book, dest);
-	
-    return load_bmlist(book, dest);
-}
-
-ErrCode
-bookmarks_save(FILE *dest, const struct Bookmarks *src)
-{
-    (void)dest;
-    (void)src;
-    return E_TODO;
-}
-
+/* Saves any bookmarks in the stack to disk and and frees all
+   dynamically allocated memory associated with the structure. */
 void
-bookmarks_close(FILE **toclose)
+bookmarks_close(struct Bookmarks *toclose)
 {
-    return fcloseifexists(toclose);
+    assert_ptr(toclose!=NULL);
+
+    if (toclose->fh) 
+	if (toclose->n > 0) 	/* stack populated: write to file  */
+	    save_bmstack(toclose);
+
+    if (toclose->fh)
+	fclose(toclose->fh);
+    if (toclose->n == 0)	/* stack empty: delete empty file */
+	remove(toclose->fname);
+
+    if (toclose->stack)
+	free(toclose->stack);
+    if (toclose->fname)
+	free(toclose->fname);
+
+    return; 
 }
 
 /* STATIC FUNCTIONS */
 
-/* Returns the number of bytes in a file. */
+/* Performs 2B XOR checksum on the file stream fh from its current
+   position to the end of the file.
+
+   If EOF is reached SUCCESS is returned, lrc and len are populated
+   with the checksum and file length respectively. The file
+   position set to the beginning of the file.
+
+   Returns E_IO if EOF not reached. */
 static ErrCode
-flength(FILE *tomeasure, long *len_out)
+flrc(FILE *fh, checksum *lrc, size_t *len)
 {
-    long start_len;
+    int ch[2];			
 
-    assert(tomeasure && len_out && "Dereferenced null pointer");
-
-    start_len = ftell(tomeasure);
-    if (fseek(tomeasure, 0L, SEEK_END) == -1)
-	return E_IO;
-    *len_out = ftell(tomeasure);
-    if (fseek(tomeasure, start_len, SEEK_SET) == -1)
-	return E_IO;
-
-    return SUCCESS;
+    *lrc = 0;
+    *len = 0; 
+    while ((ch[0]=getc(fh)) != EOF) {
+	*lrc ^= ch[0] << 8;
+	++len;
+	if ((ch[1]=getc(fh)) != EOF) {
+	    *lrc ^= ch[1];
+	    ++len;
+	} else {
+	    break;
+	}
+    }
+	
+    return feof(fh) ? (rewind(fh), SUCCESS) : E_IO;
 }
 
-/* checksum */
-static ErrCode
-fcksum(FILE *tohash, long *hash)
+/* Returns a dynamically allocated filename created from a hexidecimal
+   representation of the checksum and the file extension. */
+char *
+fname_create(checksum name, const char *ext)
 {
-    //At the moment this is just the file length
-    return flength(tohash, hash);
+    assert(sizeof name == 2);
+
+    char     *str;		/* filename string */
+    ssize_t   len;		/* number of characters in string */
+
+    len = (sizeof name * 2) + strlen(ext);
+    str = malloc(len+1);	/* extra byte for null character */
+    if (!str)			
+	return NULL;
+
+    if (snprintf(str, len+1, "%04x%s", name, ext) != len) 
+	return NULL;
+
+    return str;
 }
 
+//res = snprintf(*out, len+1, CKSUM_FMT "%s", name, STACK_FEXT);
+
+/* Closes file and sets stream ptr to null - or does nothing if
+   already null. */
 static void 
 fcloseifexists(FILE **toclose)
 {
@@ -203,14 +242,15 @@ fcloseifexists(FILE **toclose)
 
 /* Read a single byte into buffer */
 static ErrCode
-read_utf8_octet(FILE *book_to_read, byte *buf)
+read_utf8_octet(FILE *fh, byte *buf)
 {
     int n;
+    assert_ptr(fh && buf);
 
-    n = fread(buf, 1, 1, book_to_read);
+    n = fread(buf, 1, 1, fh);
     if (n != 1) {
-	if (feof(book_to_read)) {
-	    clearerr(book_to_read);
+	if (feof(fh)) {
+	    clearerr(fh);
 	    return E_EOF;
 	} else {
 	    return E_IO;
@@ -249,6 +289,7 @@ static unicode
 utf8tocp(byte *utf8, unsigned len)
 {
     unicode codepoint = 0;
+    assert_ptr(utf8 != NULL);
 
     switch ( len ) {
 	/* Decode a number of bytes equal to the sequence length. */
@@ -292,6 +333,8 @@ utf8tocp(byte *utf8, unsigned len)
 static void
 cptoutf8(unicode codepoint, byte (*utf8)[4])
 {
+    assert_ptr(utf8 != NULL);
+
     if (codepoint > 0x10FFFF) {	       /* Invalid - too long */
 	return;
     } else if (codepoint > 0x00FFFF) { /* 4B */
@@ -313,22 +356,62 @@ cptoutf8(unicode codepoint, byte (*utf8)[4])
     return;
 }
 
-/*
-   LINKED LIST IMPLEMENTATION FOR MARKS
-*/
+/* BOOKMARKING STACK AND IO */
 
+/* Reads a stack saved to disk using save_bmstack() into the bookmark
+   handle arg. 
+
+   File format:    | n | len | stack | 
+
+   Returns: SUCCESS    struct populated as expected
+            E_FFORMAT  EOF reached unexpectedly or corrupt data
+            E_IO       file read error
+            E_MEM      malloc error
+*/
 static ErrCode
-new_bmlist(FILE *book, struct Bookmarks *new)
+load_bmstack(struct Bookmarks *out)
 {
-    (void)book;
-    (void)new;
-    return E_TODO;
+    /* 
+       Determine how much to read from file
+    */
+    if (fread(&out->n, sizeof out->n, 1, out->fh) != 1)
+	goto check_eof;
+    if (fread(&out->len, sizeof out->len, 1, out->fh) != 1)
+	goto check_eof;
+    /*
+       Resize buffer to fit the stack on file before reading file
+    */
+    out->stack = realloc(out->stack, out->len * (sizeof *out->stack));
+    if (!out->stack)
+	return E_MEM;
+    if (out->len == 0)
+	return E_FFORMAT;
+    if (fread(out->stack, sizeof *out->stack, out->len, out->fh) != out->len)
+	goto check_eof;
+
+    return SUCCESS;
+ check_eof:
+    return feof(out->fh) ? E_FFORMAT : E_IO;
 }
 
+/* Saves the Bookmark structure to disk. 
+
+   Should only be called if stack is not empty (out->n > 0)
+
+   File format:    | n | len | stack |      */
 static ErrCode
-load_bmlist(FILE *src, struct Bookmarks *dest)
+save_bmstack(struct Bookmarks *out)
 {
-    (void)src;
-    (void)dest;
-    return E_TODO;
+    assert(out->n > 0 && "Won't write empty stack"); 
+
+    if (fwrite(&out->n, sizeof out->n, 1, out->fh) != 1)
+	goto err;
+    if (fwrite(&out->len, sizeof out->len, 1, out->fh) != 1)
+	goto err;
+    if (fwrite(out->stack, sizeof *out->stack, out->len, out->fh) != out->len)
+	goto err;
+
+    return SUCCESS;
+ err:
+    return E_IO;
 }

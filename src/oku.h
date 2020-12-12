@@ -10,43 +10,42 @@
 #include <stdint.h>
 
 /* Useful unicode codepoints */
-#define CODEPOINT_INVALID_CHAR 0x0000FFFD
+#define CODEPOINT_INVALID_CHAR  0x0000FFFD
 
-/* unicode codepoint (maximum 21bits U+10FFFF) */
-typedef uint32_t unicode;
-
-/* Must be an octet */
-typedef unsigned char byte;
-
-/* Coordinate system large enough to describe all pixel coordinates */
-typedef uint16_t coordinate;
+typedef uint32_t      unicode;	  /* codepoint (max 21bits) */
+typedef unsigned char byte;	  /* octet */
+typedef uint16_t      coordinate; /* epd pixel coordinate */
+typedef uint16_t      checksum;	  /* file hash */
 
 struct Point {
-    coordinate     x;		/* The abscissa */
-    coordinate     y;		/* The ordinate */
+    coordinate        x;		/* The abscissa */
+    coordinate        y;		/* The ordinate */
 };
 
 struct Raster {
-    struct Point   size;	/* px from top left origin */
-    byte          *bitmap; 
+    struct Point      size;	/* px from top left origin */
+    byte             *bitmap; 	/* horizontally packed map */
 };
 
 /* Bitmap data for one character glyph */
 struct Glyph {
-    unicode        codepoint;
-    struct Raster  render;
+    unicode           codepoint;
+    struct Raster     render;
 };
 
-/* Bookmark (doubly linked list) */
-struct Mark {
-    long           fpos;
-    struct Mark   *next, *prev;
+struct Book {
+    checksum          fhash;	/* book file hash */
+    size_t            len;	/* file length in bytes  */
+    FILE             *fh; 	/* file handle */
 };
 
 struct Bookmarks {
-    long             cksum;
-    const char      *book_path;
-    struct Mark     *head;
+    char             *fname;	/* filename generated from hash */
+    FILE             *fh;	/* stack file handle */
+
+    /* The following fields are recorded in fh above  */
+    size_t            n, len;	/* entries and buffer length B  */
+    long             *stack;	/* file position records */
 };
-    
+
 #endif	/* OKU_TYPES_H */

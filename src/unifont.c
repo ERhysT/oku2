@@ -104,7 +104,7 @@ unifont_render(FILE* fh, struct Glyph *out)
 
     /* Check and move past the delimiter */
     if (*line_cur++ != DELIMITER)
-	return E_UNIFONT;	/* invalid file format */
+	return E_FFORMAT;	/* invalid file format */
 
     out->render.bitmap = calloc(32, sizeof *out->render.bitmap); 
     if (out->render.bitmap == NULL)
@@ -115,7 +115,7 @@ unifont_render(FILE* fh, struct Glyph *out)
     while (*line_cur!='\0' && !isspace(*line_cur)) {
 
 	if (sscanf(line_cur, "%02hhX", bmp_cur) != 1)
-	    return E_UNIFONT;
+	    return E_FFORMAT;
 
 	line_cur += 2;		/* 2 hexadecimal characters for one byte */
 	++bmp_cur;
@@ -137,7 +137,7 @@ unifont_render(FILE* fh, struct Glyph *out)
 	free(out->render.bitmap);
 	out->render.bitmap = NULL;
 	rewind(fh);
-	return E_UNIFONT;
+	return E_FFORMAT;
     }
 
 #ifdef DEBUG

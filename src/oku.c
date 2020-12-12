@@ -17,7 +17,6 @@
 
 #define DEFAULT_BOOK       "book.utf8"
 #define DEFAULT_FONT       "unifont.hex"
-#define DEFAULT_BMARK      "bookmarks.oku"
 
 volatile sig_atomic_t sigint;
 
@@ -72,10 +71,12 @@ main(int argc, char *argv[])
     struct sigaction    sigint_action; /* signal handler */
     struct termios      old_tattr;     /* terminal input settings */
 
-    /* File paths and their respective streams */
-    const char         *book_path, *font_path, *bmark_path;
-    FILE               *bookfh,    *fontfh,    *bmarkfh; 
+    /* File paths and streams */
+    const char         *font_path, *book_path;
+    FILE               *fontfh;    
 
+    /* Interface objects */
+    struct Book         book;	    /* text file */
     struct Point        pen, paper; /* epd cursor, limits  */
     struct Glyph        glyph;	    /* single rendered character */
     struct Bookmarks    pages;	    /* file position log */
@@ -86,19 +87,21 @@ main(int argc, char *argv[])
     default:  puts("USAGE: oku [filename]");     return E_ARG;
     }
     
-    font_path = DEFAULT_FONT;
-    bmark_path = DEFAULT_BMARK;
+    font_path  = DEFAULT_FONT;
 
     status = set_input_mode(&old_tattr);
     if (status)	goto os_cleanup;
     status = catch_sigint(&sigint_action);
     if (status)	goto os_cleanup;
 
-    status = book_open(book_path, &bookfh); 
+    status = book_open(book_path, &book); 
     if (status)	goto os_cleanup;
     status = unifont_open(font_path, &fontfh);
     if (status)	goto os_cleanup;
 
+    status = bookmarks_open(&book, &pages);
+    if (status) goto os_cleanup;
+    
     status = epd_start(&paper);  /* device powered: must be shutdown later */
     if (status)	goto os_cleanup;
     status = epd_clear();
@@ -108,11 +111,6 @@ main(int argc, char *argv[])
 
     pen.x = pen.y = 0; 		/* start writing at (top left) origin */
 
-    status = bookmarks_open(bmark_path, &bmarkfh);
-    if (status) goto epd_shutdown;
-    status = bookmarks_load(bookfh, bmarkfh, &pages);
-    if (status) goto epd_shutdown;
-    
     do {
 	/*
 	   User Input
@@ -131,7 +129,7 @@ main(int argc, char *argv[])
 	    /*
 	      Load bitmap of the next character
 	    */
-	    status = book_get_codepoint(bookfh, &glyph.codepoint);
+	    status = book_get_codepoint(&book, &glyph.codepoint);
 	    if (status)	goto epd_shutdown;
 	    status = unifont_render(fontfh, &glyph);
 	    if (status)	goto epd_shutdown;
@@ -144,7 +142,7 @@ main(int argc, char *argv[])
 	    }
 	    if (pen.y+glyph.render.size.y > paper.y) {
 		free(glyph.render.bitmap); 
-		book_unget_codepoint(bookfh, glyph.codepoint);
+		book_unget_codepoint(&book, glyph.codepoint);
 		break;
 	    }
 
@@ -178,10 +176,9 @@ main(int argc, char *argv[])
     err_print(epd_stop());
 
  os_cleanup:
-    bookmarks_save(bmarkfh, &pages);
-    bookmarks_close(&bmarkfh);
+    bookmarks_close(&pages);
     unifont_close(&fontfh);
-    book_close(&bookfh);
+    book_close(&book);
     reset_input_mode(&old_tattr);
 
     err_print(status);

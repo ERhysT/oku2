@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <assert.h>
 
 #include "err.h"
 
@@ -29,7 +30,10 @@ static const char *errcode_str[] =
       "End of file",
       "Memory error",
       "Unicode codepoint undefined in font",
-      "Invalid unifont file format"
+      "Invalid file format",
+      "File is empty",
+      "Corrupt .oku file (manually delete)" 
+      "Buffer overflow prevented or detected"
     };
 
 /* Prints error strings to stderr. */
@@ -41,8 +45,21 @@ err_print(ErrCode status)
     if (errno)
 	fprintf(stderr, "[ERRNO %d]\t%s\n", errno, strerror(errno));
 
-    errno = 0;			/* reset errno */
+    err_clear_errno();
 
     return;
 }
 
+/* clear errno */
+void
+err_clear_errno(void)
+{
+    errno = 0;			/* reset errno */
+}
+
+/* terminates program with message to stderr if false */
+void
+assert_ptr(int exit_if_false)
+{
+    assert(exit_if_false && "Attemped to dereference a null pointer");
+}

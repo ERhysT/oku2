@@ -25,10 +25,14 @@ typedef enum err_code {
     E_EOF,
     E_MEM,
     E_MISSINGCHAR,
-    E_UNIFONT
+    E_FFORMAT,
+    E_MT,
+    E_HASH,
+    E_OVERFLOW
 } ErrCode;
 
-/* Print error strings */
-void err_print(ErrCode status);
+void err_print(ErrCode status);	    /* Print error strings */
+void assert_ptr(int exit_if_false); /* terminates if false */
+void err_clear_errno(void);	    /* sets errno to 0 */
 
 #endif	/* OKU_ERR_H */
