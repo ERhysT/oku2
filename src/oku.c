@@ -159,7 +159,7 @@ main(int argc, char *argv[])
     ERR_CHECK( epd_start(&paper));
     ERR_CHECK( epd_clear());
 
-    pen.x = pen.y = 0; 		/* start writing at (top left) origin */
+    pen.x = pen.y = 0; 		/* start writing at origin top left */
 
     while (!sig) {
 	fputs("Input: next(k) previous(j) quit(q) then ^D... ", stdout);
@@ -171,8 +171,8 @@ main(int argc, char *argv[])
 	default:  puts("Unrecognised character.");      continue;
 	}
 
-	ERR_CHECK( epd_refresh()); /* updates epd */
 	ERR_CHECK( bookmarks_push(&book, &pages));
+	ERR_CHECK( epd_refresh()); /* updates epd */
     } 
 
     die(SUCCESS);
