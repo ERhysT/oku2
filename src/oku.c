@@ -168,7 +168,7 @@ main(int argc, char *argv[])
 	case 'j': ERR_CHECK( page_bward());             break;
 	case 'k': ERR_CHECK( page_fward());             break;
 	case 'q': die(SUCCESS);                         break;
-	default:  puts("Unrecognised character.");      continue;
+	default:  puts("Unrecognised character.\n");    continue;
 	}
 
 	ERR_CHECK( bookmarks_push(&book, &pages));

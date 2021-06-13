@@ -10,7 +10,7 @@ PI_HOSTNAME=pi
 PI_DIR=oku
 PI_FULL=$(PI_USERNAME)@$(PI_HOSTNAME):$(PI_DIR)
 
-.PHONY: all clean tags sync
+.PHONY: all clean tags sync remote
 
 ifeq '$(USER)' '$(PI_USERNAME)'
 all: $(TARGET)
@@ -25,7 +25,7 @@ $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) $(INCLUDE) -c $< -o $@ $(LIBS)
 
 clean:
-	rm -f $(OBJ) oku
+	rm -f $(OBJ) $(TARGET)
 
 tags:
 	@etags src/*.c src/*.h

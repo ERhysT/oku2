@@ -149,9 +149,7 @@ ErrCode
 bookmarks_push(const struct Book *position, struct Bookmarks *addto)
 {
     ErrCode status;
-    /*
-      Grow stack if full
-     */
+    /* Grow stack if full */
     if (addto->n == addto->len) {
 	addto->len *= 2;
 	status = grow_bmstack(addto->stack, addto->len);
@@ -164,10 +162,10 @@ bookmarks_push(const struct Book *position, struct Bookmarks *addto)
 	return E_IO;
     else
 	++addto->n;
-    
+
 #ifdef DEBUG
-    printf("Bookmark: %s %lu [%u/%u]\n", addto->fname,
-	   addto->stack[addto->n], addto->n, addto->len);
+    printf("BMstack: push @%ldB\t(%04u,%04u) -> %s\n",
+	   addto->stack[addto->n-1], addto->n-1, addto->len, addto->fname);
 #endif
 
     return SUCCESS;
@@ -448,5 +446,10 @@ static ErrCode
 grow_bmstack(long *stack, size_t newlen)
 {
     stack = realloc(stack, newlen * (sizeof *stack));
+
+#ifdef DEBUG
+    printf("BMstack: resized to %uB\n", newlen);
+#endif
+
     return stack == NULL ? E_MEM : SUCCESS;
 }
